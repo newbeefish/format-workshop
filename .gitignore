@@ -1,0 +1,24 @@
+# 构建产物
+build/
+dist/
+dist-*/
+stage*/
+installer-input/
+*.jar
+*.exe
+*.msi
+
+# 运行时
+output/
+logs/
+run-*.log
+
+# 系统
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# IDE
+.idea/
+*.iml
+.vscode/
