@@ -11,19 +11,19 @@
 
 ### 图片
 - 输入：FFmpeg 能解的都行（jpg / png / webp / gif / bmp / tif / **ico** / tga / psd / dds / exr / jp2 …）
-- 输出：PNG（无损）/ JPG / WEBP / BMP / TIFF
+- 输出：PNG、JPG、WEBP、BMP、TIFF、GIF、TGA、PPM/PGM/PBM、PCX、EXR、HDR、JP2、DPX、QOI、SGI、XBM …（共 24 种）
 - 尺寸：原尺寸 / 最大边 1920 / 1280 / 800 / 缩小一半
 - 画质：高质量 / 标准 / 小体积（JPG、WEBP 生效）
 
 ### 视频
 - 输入：mp4 / mkv / avi / mov / webm / flv / wmv / ts / m4v / mpg / vob / rmvb / mxf …
-- 输出：MP4（H.264）/ MKV / WEBM（VP9）/ GIF / 提取音频
+- 输出：MP4、MKV、MOV、WEBM、AVI、FLV、WMV、TS/M2TS、MPG、3GP、OGV、VOB、MXF、NUT、Y4M、IVF、H264、MJPEG、DV …（共 29 种）
 - 画质：高质量（CRF 18）/ 标准（23）/ 小体积（28）
 - 分辨率：原尺寸 / 1080p / 720p / 480p
 
 ### 音频
 - 输入：mp3 / wav / flac / aac / m4a / ogg / opus / wma / ape / ac3 / dts / amr …
-- 输出：MP3 / WAV / FLAC / AAC / M4A / OGG / WMA / OPUS
+- 输出：MP3、WAV、FLAC、AAC、M4A、OGG、OPUS、WMA、AIFF、AC3、EAC3、MP2、AMR、AU、MKA、TTA、SPX、CAF …（共 25 种）
 - 视频文件也能直接选音频板块，自动抽音轨
 - 加密格式自动解密：
   - 酷狗：`.kgg` `.gkk` `.kgm` `.kgma` `.kge` `.kgtemp` `.vpr`
@@ -31,6 +31,7 @@
   - QQ 音乐（旧版）：`.qmc0` `.qmc2` `.qmc3` `.qmcflac` `.qmcogg` `.mflac` `.mflac0` `.mflach` `.mgg` `.mgg0` `.mgg1` `.mggl`
 
 ### 其他
+- **输出格式不是写死的**：启动时读 `ffmpeg -encoders`，只把本机真的能编出来的格式列进下拉框（当前构建实测可用：图片 24 种、视频 29 种、音频 25 种，共 78 种）
 - 并发数默认 = 本机逻辑核心数，可手动调低
 - 单实例：程序已开着时从右键菜单进来，文件直接追加进现有窗口
 - Windows 右键菜单：`用 格式作坊转为图片 / 转为视频 / 转为音频`（写 HKCU，不需要管理员）

@@ -107,7 +107,8 @@ final class ConversionView extends JPanel {
         this.outputDirectory = rootDirectory.resolve("output");
         this.engine = new MediaEngine(tools, rootDirectory.resolve("logs"));
 
-        this.formatBox = new JComboBox<>(mode.formatOptions());
+        Targets.init(tools.ffmpeg());
+        this.formatBox = new JComboBox<>(Targets.forMode(mode).toArray(new Targets.Target[0]));
         Object[] sizes = mode.sizeOptions();
         this.sizeBox = new JComboBox<>(sizes == null ? new Object[]{"—"} : sizes);
         this.qualityBox = new JComboBox<>(mode.qualityOptions());
@@ -423,37 +424,38 @@ final class ConversionView extends JPanel {
     }
 
     private void updateOptionControls() {
-        Object format = this.formatBox.getSelectedItem();
-        boolean qualityEnabled;
+        Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
+        boolean qualityEnabled = target != null && Targets.usesQuality(this.mode, target);
         String hint;
         switch (this.mode) {
             case IMAGE -> {
-                ImageFormat imageFormat = (ImageFormat) format;
-                qualityEnabled = imageFormat.usesQuality();
-                this.qualityLabel.setText(imageFormat.usesQuality() ? "画质（JPG / WEBP）" : "画质（当前格式不使用）");
-                hint = switch (imageFormat) {
-                    case PNG -> "<html>PNG 无损，体积较大。<br>适合截图、需要透明背景的素材。</html>";
-                    case JPG -> "<html>JPG 最通用，体积小。<br>透明区域会变成白色。</html>";
-                    case WEBP -> "<html>WEBP 同画质体积最小。<br>Win10 以后原生支持。</html>";
-                    case BMP -> "<html>BMP 无压缩位图。<br>体积很大，仅作兼容用。</html>";
-                    case TIFF -> "<html>TIFF 适合印刷、后期。<br>体积较大。</html>";
+                String extension = target == null ? "png" : target.extension();
+                this.qualityLabel.setText(qualityEnabled ? "画质（JPG / WEBP）" : "画质（当前格式不使用）");
+                hint = switch (extension) {
+                    case "png" -> "<html>PNG 无损，体积较大。<br>适合截图、需要透明背景的素材。</html>";
+                    case "jpg", "jpeg", "jpe", "jfif" -> "<html>JPG 最通用，体积小。<br>透明区域会变成白色。</html>";
+                    case "webp" -> "<html>WEBP 同画质体积最小。<br>Win10 以后原生支持。</html>";
+                    case "bmp", "dib" -> "<html>BMP 无压缩位图。<br>体积很大，仅作兼容用。</html>";
+                    case "tif", "tiff" -> "<html>TIFF 适合印刷、后期。<br>体积较大。</html>";
+                    case "gif" -> "<html>GIF 只保留第一帧。<br>要动图请用视频板块。</html>";
+                    default -> "<html>" + extension.toUpperCase(java.util.Locale.ROOT)
+                            + " 由 FFmpeg 直接写出。<br>冷门格式部分播放器可能不认。</html>";
                 };
             }
             case VIDEO -> {
-                VideoFormat videoFormat = (VideoFormat) format;
-                qualityEnabled = !videoFormat.isGif();
-                this.qualityLabel.setText(videoFormat.isGif() ? "质量（GIF 不使用）" : "质量");
-                hint = videoFormat.isGif()
+                boolean gif = target != null && Targets.isGif(target);
+                this.qualityLabel.setText(gif ? "质量（GIF 不使用）" : "质量");
+                hint = gif
                         ? "<html>GIF 只导出 12 帧动图，无声音。<br>适合做表情、短预览。</html>"
                         : "<html>MP4 兼容最好，WEBM 更小。<br>分辨率档位只缩小，不放大。</html>";
             }
             default -> {
-                AudioFormat audioFormat = (AudioFormat) format;
-                qualityEnabled = audioFormat == AudioFormat.MP3;
+                boolean mp3 = target != null && "mp3".equals(target.extension());
                 this.qualityLabel.setText("音质（仅 MP3）");
-                hint = audioFormat == AudioFormat.MP3
+                hint = mp3
                         ? "<html>原始 MP3 直接无损输出。<br>其他音频按所选音质编码。</html>"
-                        : "<html>" + audioFormat.label + " 使用固定参数导出，<br>音质档位不生效。</html>";
+                        : "<html>" + (target == null ? "" : target.label())
+                                + " 使用固定参数导出，<br>音质档位不生效。</html>";
             }
         }
         this.qualityBox.setEnabled(qualityEnabled && !this.running);
@@ -511,12 +513,8 @@ final class ConversionView extends JPanel {
     }
 
     private boolean qualityEnabled() {
-        Object format = this.formatBox.getSelectedItem();
-        return switch (this.mode) {
-            case IMAGE -> ((ImageFormat) format).usesQuality();
-            case VIDEO -> !((VideoFormat) format).isGif();
-            case AUDIO -> format == AudioFormat.MP3;
-        };
+        Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
+        return target != null && Targets.usesQuality(this.mode, target);
     }
 
     private MediaEngine.Settings buildSettings() {
@@ -528,24 +526,26 @@ final class ConversionView extends JPanel {
         List<String> args;
         String filter = null;
         boolean image = this.mode == Mode.IMAGE;
+        Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
+        if (target == null) {
+            return null;
+        }
 
         switch (this.mode) {
             case IMAGE -> {
-                ImageFormat format = (ImageFormat) this.formatBox.getSelectedItem();
                 ImageQuality quality = (ImageQuality) this.qualityBox.getSelectedItem();
                 ImageScale scale = (ImageScale) this.sizeBox.getSelectedItem();
-                extension = format.extension;
-                args = EncodeArgs.image(format, quality);
+                extension = target.dotted();
+                args = Targets.imageArgs(target, quality);
                 filter = scale == null ? null : scale.filter();
             }
             case VIDEO -> {
-                VideoFormat format = (VideoFormat) this.formatBox.getSelectedItem();
                 VideoQuality quality = (VideoQuality) this.qualityBox.getSelectedItem();
                 VideoResolution resolution = (VideoResolution) this.sizeBox.getSelectedItem();
-                extension = format.extension;
-                args = EncodeArgs.video(format, quality);
+                extension = target.dotted();
+                args = Targets.videoArgs(target, quality);
                 List<String> filters = new ArrayList<>();
-                if (format.isGif()) {
+                if (Targets.isGif(target)) {
                     filters.add("fps=12");
                 }
                 if (resolution != null && resolution.filter() != null) {
@@ -554,10 +554,9 @@ final class ConversionView extends JPanel {
                 filter = filters.isEmpty() ? null : String.join(",", filters);
             }
             default -> {
-                AudioFormat format = (AudioFormat) this.formatBox.getSelectedItem();
                 AudioQuality quality = (AudioQuality) this.qualityBox.getSelectedItem();
-                extension = format.extension;
-                args = EncodeArgs.audio(format, quality);
+                extension = target.dotted();
+                args = Targets.audioArgs(target, quality);
             }
         }
         return new MediaEngine.Settings(output, this.sourceDirectory.isSelected(),
