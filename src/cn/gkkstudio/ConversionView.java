@@ -90,6 +90,8 @@ final class ConversionView extends JPanel {
     private final JTextField outputField = new JTextField();
     private final JCheckBox sourceDirectory = new JCheckBox("保存到源文件夹");
     private JComboBox<Object> formatBox;
+    private JComboBox<Object> codecBox = new JComboBox<>();
+    private JLabel codecLabel;
     private JComboBox<Object> sizeBox;
     private JComboBox<Object> qualityBox;
     private JLabel sizeLabel;
@@ -108,7 +110,9 @@ final class ConversionView extends JPanel {
         this.engine = new MediaEngine(tools, rootDirectory.resolve("logs"));
 
         Targets.init(tools.ffmpeg());
-        this.formatBox = new JComboBox<>(Targets.forMode(mode).toArray(new Targets.Target[0]));
+        this.formatBox = new JComboBox<>(mode == Mode.VIDEO
+                ? VideoCatalog.containers().toArray(new Targets.Target[0])
+                : Targets.forMode(mode).toArray(new Targets.Target[0]));
         Object[] sizes = mode.sizeOptions();
         this.sizeBox = new JComboBox<>(sizes == null ? new Object[]{"—"} : sizes);
         this.qualityBox = new JComboBox<>(mode.qualityOptions());
@@ -270,7 +274,7 @@ final class ConversionView extends JPanel {
         title.setForeground(UiKit.TEXT);
         title.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(title);
-        body.add(Box.createVerticalStrut(16));
+        body.add(Box.createVerticalStrut(12));
 
         body.add(UiKit.inspectorLabel(this.mode.formatLabel()));
         body.add(Box.createVerticalStrut(7));
@@ -278,7 +282,20 @@ final class ConversionView extends JPanel {
         this.formatBox.setPreferredSize(new Dimension(226, 36));
         this.formatBox.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.formatBox);
-        body.add(Box.createVerticalStrut(11));
+        body.add(Box.createVerticalStrut(9));
+
+        if (this.mode == Mode.VIDEO) {
+            this.codecLabel = UiKit.inspectorLabel("视频编码");
+            this.codecLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+            body.add(this.codecLabel);
+            body.add(Box.createVerticalStrut(7));
+            this.codecBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+            this.codecBox.setPreferredSize(new Dimension(226, 36));
+            this.codecBox.setAlignmentX(Component.LEFT_ALIGNMENT);
+            this.refreshCodecs();
+            body.add(this.codecBox);
+            body.add(Box.createVerticalStrut(9));
+        }
 
         if (this.mode.sizeOptions() != null) {
             this.sizeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -288,13 +305,13 @@ final class ConversionView extends JPanel {
             this.sizeBox.setPreferredSize(new Dimension(226, 36));
             this.sizeBox.setAlignmentX(Component.LEFT_ALIGNMENT);
             body.add(this.sizeBox);
-            body.add(Box.createVerticalStrut(11));
+            body.add(Box.createVerticalStrut(9));
         }
 
         this.qualityLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.qualityLabel);
         body.add(Box.createVerticalStrut(7));
-        this.qualityBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
+        this.qualityBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
         this.qualityBox.setPreferredSize(new Dimension(226, 36));
         this.qualityBox.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.qualityBox);
@@ -304,7 +321,7 @@ final class ConversionView extends JPanel {
         this.hintLabel.setFont(this.hintLabel.getFont().deriveFont(12.0f));
         this.hintLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.hintLabel);
-        body.add(Box.createVerticalStrut(14));
+        body.add(Box.createVerticalStrut(10));
 
         body.add(UiKit.inspectorLabel("保存位置"));
         body.add(Box.createVerticalStrut(7));
@@ -414,7 +431,13 @@ final class ConversionView extends JPanel {
         this.table.getSelectionModel().addListSelectionListener(event -> this.updateActionState());
         this.startButton.addActionListener(event -> this.startConversion());
         this.cancelButton.addActionListener(event -> this.engine.cancel(this.items));
-        this.formatBox.addActionListener(event -> this.updateOptionControls());
+        this.formatBox.addActionListener(event -> {
+            if (this.mode == Mode.VIDEO) {
+                this.refreshCodecs();
+            }
+            this.updateOptionControls();
+        });
+        this.codecBox.addActionListener(event -> this.updateOptionControls());
         this.sizeBox.addActionListener(event -> this.updateOptionControls());
         this.sourceDirectory.addActionListener(event -> {
             boolean manual = !this.sourceDirectory.isSelected();
@@ -423,6 +446,38 @@ final class ConversionView extends JPanel {
         });
     }
 
+    /** 容器换了以后，只保留这个容器支持的编码。 */
+    private void refreshCodecs() {
+        Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
+        String extension = target == null ? "mp4" : target.extension();
+        VideoCatalog.Container container = VideoCatalog.container(extension);
+        Object previous = this.codecBox.getSelectedItem();
+        this.codecBox.removeAllItems();
+        for (VideoCatalog.Codec codec : container.codecs()) {
+            this.codecBox.addItem(codec);
+        }
+        if (previous instanceof VideoCatalog.Codec old) {
+            for (int i = 0; i < this.codecBox.getItemCount(); i++) {
+                if (((VideoCatalog.Codec) this.codecBox.getItemAt(i)).id().equals(old.id())) {
+                    this.codecBox.setSelectedIndex(i);
+                    break;
+                }
+            }
+        }
+    }
+
+    /** 提示行只放得下两行，这里按长度截断。 */
+    private static String brief(String text, int limit) {
+        if (text == null) {
+            return "";
+        }
+        String trimmed = text.replace("。", "").trim();
+        int cut = trimmed.indexOf('，');
+        if (cut > 4 && cut < limit) {
+            trimmed = trimmed.substring(0, cut);
+        }
+        return trimmed.length() <= limit ? trimmed : trimmed.substring(0, limit) + "…";
+    }
     private void updateOptionControls() {
         Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
         boolean qualityEnabled = target != null && Targets.usesQuality(this.mode, target);
@@ -443,11 +498,15 @@ final class ConversionView extends JPanel {
                 };
             }
             case VIDEO -> {
-                boolean gif = target != null && Targets.isGif(target);
+                String extension = target == null ? "mp4" : target.extension();
+                VideoCatalog.Container container = VideoCatalog.container(extension);
+                VideoCatalog.Codec codec = (VideoCatalog.Codec) this.codecBox.getSelectedItem();
+                boolean gif = "gif".equals(container.extension());
                 this.qualityLabel.setText(gif ? "质量（GIF 不使用）" : "质量");
-                hint = gif
-                        ? "<html>GIF 只导出 12 帧动图，无声音。<br>适合做表情、短预览。</html>"
-                        : "<html>MP4 兼容最好，WEBM 更小。<br>分辨率档位只缩小，不放大。</html>";
+                hint = "<html>" + container.label().split(" · ")[0] + "："
+                        + brief(container.pros(), 18) + "；缺点：" + brief(container.cons(), 14)
+                        + (codec == null ? "" : "<br>" + codec.tag() + "：" + brief(codec.pros(), 20))
+                        + "</html>";
             }
             default -> {
                 boolean mp3 = target != null && "mp3".equals(target.extension());
@@ -498,6 +557,7 @@ final class ConversionView extends JPanel {
         this.removeButton.setEnabled(!busy);
         this.importButton.setEnabled(!busy);
         this.formatBox.setEnabled(!busy);
+        this.codecBox.setEnabled(!busy);
         this.sizeBox.setEnabled(!busy);
         this.qualityBox.setEnabled(!busy && this.qualityEnabled());
         this.concurrencySpinner.setEnabled(!busy);
@@ -542,10 +602,15 @@ final class ConversionView extends JPanel {
             case VIDEO -> {
                 VideoQuality quality = (VideoQuality) this.qualityBox.getSelectedItem();
                 VideoResolution resolution = (VideoResolution) this.sizeBox.getSelectedItem();
+                VideoCatalog.Container container = VideoCatalog.container(target.extension());
+                VideoCatalog.Codec codec = (VideoCatalog.Codec) this.codecBox.getSelectedItem();
+                if (codec == null) {
+                    codec = VideoCatalog.H264;
+                }
                 extension = target.dotted();
-                args = Targets.videoArgs(target, quality);
+                args = VideoCatalog.args(container, codec, quality);
                 List<String> filters = new ArrayList<>();
-                if (Targets.isGif(target)) {
+                if ("gif".equals(container.extension())) {
                     filters.add("fps=12");
                 }
                 if (resolution != null && resolution.filter() != null) {
