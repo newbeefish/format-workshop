@@ -126,6 +126,14 @@ logs\                每次转换的日志
 代码签名证书。程序本身不联网上传文件（只有 QQ 音乐格式会向官方
 接口请求该曲的 ekey）。
 
-界面逻辑源自 kgg-mp3（MIT）；解密工具与参数源自 KGM2MP3 及其内置第三方
-工具，版权归各自作者所有；FFmpeg 为 GPL。请仅转换你合法获得的文件，
-仅供个人使用，请勿传播或牟利。
+十、许可与来源
+----------------------------------------
+本项目以 GNU General Public License v3.0 发布，许可证全文见程序目录下的
+LICENSE 文件（源码仓库：https://github.com/newbeefish/format-workshop）。
+
+· 界面逻辑源自 kgg-mp3（MIT），已按 GPL-3.0 重新发布
+· 解密能力与参数源自 KGM2MP3 项目，其组件（kgg-dec / unlockKuGoWin /
+  ncmdump）随本安装包内置在 app\tools\ 下，不需要另行下载
+· FFmpeg 遵循其自身许可证（LGPL/GPL，取决于构建选项），FlatLaf 为 Apache-2.0
+
+请仅转换你合法获得的文件；解密功能可能违反相关平台服务条款，风险自担。
