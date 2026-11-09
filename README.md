@@ -59,22 +59,27 @@ jpackage --type exe --name "格式作坊" --app-version 2.0.0 `
   --win-dir-chooser --win-menu --win-shortcut
 ```
 
-### 运行时依赖（不随源码分发）
+### 解密与转换是怎么实现的
 
-安装包里已经带好，自己构建时需要放进 `app\tools\`：
+三种方式，**除 FFmpeg 外全部随安装包内置，不需要联网下载，也不需要另外装任何东西**：
 
-| 文件 | 用途 |
-|---|---|
-| `ffmpeg.exe` | 所有转换 |
-| `kgg-dec.exe` | 酷狗 KGG v5 |
-| `unlockKuGoWin-64.exe` + `kgm.mask` + `infra.dll` | 酷狗 KGM 兜底 |
-| `ncmdump.exe` | 网易云 NCM |
+| 能力 | 实现方式 | 位置 |
+|---|---|---|
+| 图片 / 视频 / 音频 转换 | FFmpeg | 内置 `app\tools\ffmpeg.exe`（100 MB） |
+| 酷狗 KGM（v4） | 纯 Java 解码，掩码表也在 jar 里 | `KgmDecoder.java` + `res\cn\gkkstudio\kgm-mask-v2.gz` |
+| 酷狗 KGG（v5）/ KGMA | 内置命令行组件 | `app\tools\kgg-dec.exe` |
+| 酷狗 KGM 64–78 MB 兜底 | 内置命令行组件 | `app\tools\unlockKuGoWin-64.exe` + `kgm.mask` + `infra.dll` |
+| 网易云 NCM | 内置命令行组件 | `app\tools\ncmdump.exe` |
+| QQ 音乐 QMC / MFLAC / MGG（旧版） | 纯 Java 实现（含 TC-TEA、QMC2 映射、改表 RC4） | `QmcDecoder.java`、`TcTea.java` |
 
-`res/cn/gkkstudio/kgm-mask-v2.gz` 是 KGM 掩码表（内置在 jar 里）。
+所谓“内置命令行组件”，是指 KGM2MP3 项目里那几个解密程序被**打包进了安装包**（就躺在 `app\tools\` 里），程序在需要时把它们当子进程调用。
+它们不是 Java 源码，所以没法编进 jar——但这跟“外部工具需要用户自己装/联网下载”是两回事，全都是随包分发的。
+
+源码仓库为了体积和许可清晰，不包含这些二进制（`ffmpeg.exe` 100 MB、`infra.dll` 等），自己构建时按上表放进 `app\tools\` 即可。
 
 ## 已知限制
 
-- KGM 单文件超过 64 MB 会走外部工具，超过 78 MB 直接报错（掩码表只覆盖到 64 MB）
+- KGM 单文件超过 64 MB 会切到内置的 unlockKuGoWin 兜底，超过 78 MB 直接报错（内置掩码表只覆盖到 64 MB）
 - HEIC / AVIF 依赖 FFmpeg 版本，当前内置的 9.0 不解这两个
 - 视频编码只用 CPU（x264 / VP9），没有硬编码
 - QQ 音乐 19.57 之后的 `.mflac` 需要登录态（ekey 不内嵌），程序会提示缺少凭据
@@ -91,4 +96,4 @@ jpackage --type exe --name "格式作坊" --app-version 2.0.0 `
 
 你可以自由使用、修改、再分发，但衍生作品也须以 GPL-3.0 开源，且不提供任何担保。
 
-第三方组件遵循各自许可证：FFmpeg（LGPL/GPL，取决于编译选项）、FlatLaf（Apache-2.0），以及酷狗 / 网易云 / QQ 音乐解密所用的外部工具。
+第三方组件遵循各自许可证：FFmpeg（LGPL/GPL，取决于编译选项）、FlatLaf（Apache-2.0），以及随安装包分发的 KGM2MP3 解密组件（kgg-dec / unlockKuGoWin / ncmdump）。
