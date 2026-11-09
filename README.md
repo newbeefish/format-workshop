@@ -1,6 +1,6 @@
 # 格式作坊 · Format Workshop
 
-> 当前版本 2.0.1（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
+> 当前版本 2.1.0（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
 
 一个纯本地运行的 Windows 图形化格式转换工具，界面用 Java Swing + FlatLaf 手写（紫色主题、玻璃拟态），
 内核全部走 **FFmpeg**，另外内置酷狗 / 网易云 / QQ 音乐加密格式的解密能力。
@@ -36,6 +36,17 @@
   - 网易云：`.ncm`
   - QQ 音乐（旧版）：`.qmc0` `.qmc2` `.qmc3` `.qmcflac` `.qmcogg` `.mflac` `.mflac0` `.mflach` `.mgg` `.mgg0` `.mgg1` `.mggl`
 
+### 杂项
+第四个板块，处理“不是媒体”的文件：
+
+- **打包为 ZIP**：文件/文件夹 → `.zip`
+- **解压 ZIP**：`.zip` → 同名文件夹（自动防路径穿越）
+- **打包为 TAR.GZ**：Linux 友好的 `.tar.gz`
+- **解压 TAR / GZ**：支持 `.tar`、`.tar.gz`、`.tgz`、`.gz`
+- **图片合成 PDF**：JPG/PNG/BMP/GIF/TIFF/WEBP → `.pdf`（按原图尺寸成页）
+- **PDF 拆成图片**：PDF 每页导出 PNG/JPG（150 DPI）
+
+ZIP/TAR 是 Java 原生实现，PDF 用内置的 Apache PDFBox（打包进 jar），都不依赖外部程序。
 ### 其他
 - **输出格式不是写死的**：启动时读 `ffmpeg -encoders`，只把本机真的能编出来的格式列进下拉框（当前构建：图片 23 种、视频 16 容器 × 11 编码、音频 25 种，全部实测通过）
 - 并发数默认 = 本机逻辑核心数，可手动调低
