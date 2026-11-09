@@ -214,7 +214,7 @@ final class MediaEngine implements AutoCloseable {
 
             List<String> command = new ArrayList<>();
             command.add(this.tools.ffmpeg().toString());
-            command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin", "-i", resolved.path().toString()));
+            command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin", "-i", effectiveInput(resolved.path()).toString()));
             if (settings.imageJob()) {
                 command.addAll(List.of("-frames:v", "1"));
             } else if (settings.mode() == Mode.VIDEO) {
@@ -268,7 +268,7 @@ final class MediaEngine implements AutoCloseable {
                 String message = simplifyError(errors.toString());
                 throw new IOException(message.isBlank() ? "FFmpeg 无法读取该文件" : message);
             }
-            Files.move(partFile, target, StandardCopyOption.REPLACE_EXISTING);
+            moveOrCopy(partFile, target);
             item.output = target;
             item.state = TransferItem.State.DONE;
             item.progress = 100;
@@ -731,6 +731,48 @@ final class MediaEngine implements AutoCloseable {
         }
     }
 
+    /** 跨盘（C: → D:/E:）时 Files.move 会失败，这里退化成复制再删除。 */
+    /** HEIC/HEIF 先借 heif-dec 转成 PNG，再交给 FFmpeg。 */
+    private Path effectiveInput(Path source) {
+        String name = source.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+        if (!name.endsWith(".heic") && !name.endsWith(".heif") && !name.endsWith(".hif")) {
+            return source;
+        }
+        Path tool = this.tools.ffmpeg() == null ? null
+                : this.tools.ffmpeg().getParent().resolve("heif").resolve("heif-dec.exe");
+        if (tool == null || !Files.isRegularFile(tool)) {
+            return source;
+        }
+        try {
+            Path out = Files.createTempFile("heif-", ".png");
+            Files.deleteIfExists(out);
+            Process process = new ProcessBuilder(tool.toString(), source.toString(), out.toString())
+                    .redirectErrorStream(true).start();
+            process.getInputStream().readAllBytes();
+            process.waitFor();
+            if (Files.isRegularFile(out) && Files.size(out) > 0) {
+                return out;
+            }
+        } catch (Exception ignored) {
+            // 失败则原样交给 FFmpeg，让它报错
+        }
+        return source;
+    }
+    private static void moveOrCopy(Path source, Path target) throws IOException {
+        Files.createDirectories(target.getParent());
+        try {
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+            return;
+        } catch (IOException ignored) {
+            // 跨卷或目标被占用，走复制
+        }
+        Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+        try {
+            Files.deleteIfExists(source);
+        } catch (IOException ignored) {
+            // 临时文件删不掉不影响结果
+        }
+    }
     private static String simplifyError(String text) {
         String lower = text.toLowerCase(Locale.ROOT);
         if (lower.contains("invalid data found") || lower.contains("could not find codec parameters")) {

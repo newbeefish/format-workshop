@@ -20,6 +20,8 @@ final class AudioCatalog {
 
     private static final Map<String, Info> INFO = new HashMap<>();
     private static final Map<String, List<Codec>> CODECS = new HashMap<>();
+    /** 下拉框里跟在格式名后面的一句短介绍。 */
+    private static final Map<String, String> NOTES = new HashMap<>();
 
     private static Codec aac(String label, String args) {
         return new Codec("aac", label, List.of(args.split(" ")));
@@ -71,6 +73,56 @@ final class AudioCatalog {
         INFO.put("xwma", new Info("Xbox 用的 WMA 变体", "只适合老游戏资源",
                 "特性：游戏音频打包"));
 
+        INFO.put("dts", new Info("影院级多声道，码率高", "体积大，普通播放器可能不解", "特性：DTS 环绕声，DVD/蓝光常见"));
+        INFO.put("dtshd", new Info("DTS-HD 无损环绕", "文件很大，需要支持设备", "特性：蓝光音轨，可向下兼容 DTS"));
+        INFO.put("mp1", new Info("MPEG-1 Layer I，最老的 MP3 前身", "效率低，体积大", "特性：数字广播和老设备"));
+        INFO.put("mpa", new Info("MPEG 音频裸流", "没有容器，播放器支持一般", "特性：MP3 裸流，多见于老转码流程"));
+        INFO.put("oga", new Info("Ogg 音频容器", "开源、免专利", "特性：可装 Vorbis 或 Opus，扩展名区别只在习惯"));
+        INFO.put("aif", new Info("AIFF 苹果无损", "没有压缩，音质原样", "特性：Mac 录音常用，和 WAV 等价的苹果格式"));
+        INFO.put("aifc", new Info("AIFF 压缩变体", "兼容老 Mac 软件", "特性：AIFF-C，可带压缩编码"));
+        INFO.put("alac", new Info("苹果无损压缩", "无损且支持苹果生态", "特性：iTunes/Apple Music 无损常用，装在 M4A 里"));
+        INFO.put("m4r", new Info("iPhone 铃声格式", "iOS 直接识别", "特性：实际是 M4A，长度通常限制 30 秒"));
+        INFO.put("m4b", new Info("有声书格式", "支持章节标记和书签", "特性：AAC 编码，播放器能记住进度"));
+        INFO.put("wave", new Info("WAV 的另一种扩展名", "兼容性同 WAV", "特性：某些老工具只认 .wave"));
+        INFO.put("snd", new Info("AU 的别名", "老 Unix 录音常见", "特性：Sun/NeXT 音频"));
+        INFO.put("amr", new Info("语音专用，体积极小", "只适合人声，音质差", "特性：老手机录音、彩信常见"));
+        INFO.put("w64", new Info("Sony 64 位 WAV", "支持超过 4GB 的录音", "特性：长时间录音、多轨工程"));
+
+        NOTES.put("mp3", "通用音频");
+        NOTES.put("wav", "未压缩");
+        NOTES.put("flac", "无损音频");
+        NOTES.put("aac", "高效有损");
+        NOTES.put("m4a", "苹果通用");
+        NOTES.put("ogg", "开源免专利");
+        NOTES.put("oga", "开源免专利");
+        NOTES.put("opus", "低码率强");
+        NOTES.put("wma", "Windows 老格式");
+        NOTES.put("aiff", "苹果无损");
+        NOTES.put("aif", "苹果无损");
+        NOTES.put("aifc", "苹果无损");
+        NOTES.put("ac3", "杜比环绕");
+        NOTES.put("eac3", "杜比+ 更省");
+        NOTES.put("dts", "影院环绕");
+        NOTES.put("dtshd", "蓝光无损环绕");
+        NOTES.put("mp2", "广播 / 电视");
+        NOTES.put("mp1", "老广播");
+        NOTES.put("mpa", "MP3 裸流");
+        NOTES.put("amr", "语音 / 彩信");
+        NOTES.put("au", "老 Unix");
+        NOTES.put("snd", "老 Unix");
+        NOTES.put("mka", "多声道容器");
+        NOTES.put("tta", "无损备选");
+        NOTES.put("spx", "语音专用");
+        NOTES.put("caf", "苹果容器");
+        NOTES.put("m4b", "有声书");
+        NOTES.put("m4r", "iPhone 铃声");
+        NOTES.put("w64", "超大录音");
+        NOTES.put("wave", "未压缩");
+        NOTES.put("gsm", "电话音质");
+        NOTES.put("voc", "老声卡录音");
+        NOTES.put("wv", "无损（WavPack）");
+        NOTES.put("xwma", "Xbox 老游戏");
+        NOTES.put("alac", "苹果无损");
         CODECS.put("m4a", List.of(
                 new Codec("aac", "AAC · 有损 · 体积小", List.of("-c:a", "aac", "-b:a", "192k")),
                 new Codec("alac", "ALAC · 无损 · 体积大", List.of("-c:a", "alac"))));
@@ -100,6 +152,11 @@ final class AudioCatalog {
 
     static Info info(String extension) {
         return INFO.getOrDefault(extension, new Info("由 FFmpeg 编码", "冷门格式，部分软件不认", ""));
+    }
+
+    /** 格式后面的一句短介绍，没有介绍时返回空串。 */
+    static String note(String extension) {
+        return NOTES.getOrDefault(extension, "");
     }
 
     /** 有多个可选编码的容器；没有返回 null 表示沿用默认参数。 */

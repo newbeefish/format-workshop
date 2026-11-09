@@ -1,11 +1,11 @@
 # 格式作坊 · Format Workshop
 
-> 当前版本 2.1.0（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
+> 当前版本 2.3.2（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
 
 一个纯本地运行的 Windows 图形化格式转换工具，界面用 Java Swing + FlatLaf 手写（紫色主题、玻璃拟态），
 内核全部走 **FFmpeg**，另外内置酷狗 / 网易云 / QQ 音乐加密格式的解密能力。
 
-图片、视频、音频三合一，拖进去就能转，不联网、不上传、不覆盖原文件。
+图片、视频、音频三合一，外加一个杂项工具箱；拖进去就能转，不联网、不上传、不覆盖原文件。
 
 ![截图](docs/screenshot.png)
 
@@ -30,6 +30,7 @@
 ### 音频
 - 输入：mp3 / wav / flac / aac / m4a / ogg / opus / wma / ape / ac3 / dts / amr …
 - 输出：MP3、WAV、FLAC、AAC、M4A、OGG、OPUS、WMA、AIFF、AC3、EAC3、MP2、AMR、AU、MKA、TTA、SPX、CAF …（共 25 种）
+- 每种格式后面都带一句短说明（MP3 · 通用音频 / FLAC · 无损音频 / OPUS · 低码率强 …），右侧还会列出它的优缺点
 - 视频文件也能直接选音频板块，自动抽音轨
 - 加密格式自动解密：
   - 酷狗：`.kgg` `.gkk` `.kgm` `.kgma` `.kge` `.kgtemp` `.vpr`
@@ -37,16 +38,38 @@
   - QQ 音乐（旧版）：`.qmc0` `.qmc2` `.qmc3` `.qmcflac` `.qmcogg` `.mflac` `.mflac0` `.mflach` `.mgg` `.mgg0` `.mgg1` `.mggl`
 
 ### 杂项
-第四个板块，处理“不是媒体”的文件：
+第四个板块，处理“不是媒体”的文件，按右上角分成四类：
 
-- **打包为 ZIP**：文件/文件夹 → `.zip`
-- **解压 ZIP**：`.zip` → 同名文件夹（自动防路径穿越）
-- **打包为 TAR.GZ**：Linux 友好的 `.tar.gz`
-- **解压 TAR / GZ**：支持 `.tar`、`.tar.gz`、`.tgz`、`.gz`
+**压缩打包**
+- **打包 / 解压 ZIP**：`.zip` ↔ 文件夹（解压时自动防路径穿越）
+- **打包 / 解压 TAR.GZ**：Linux 友好的 `.tar.gz`，也认 `.tar`、`.tgz`、`.gz`
+- **打包 / 解包 7Z**：LZMA2，比 ZIP 更小
+- **打包 / 解包 XZ**：单文件 LZMA2
+- **打包 / 解包 JAR**：带 `META-INF/MANIFEST.MF`，也能直接当 zip 解开
+- **打包 / 解包 ZPAQ**：走内置的 `zpaq64.exe`
+- **压缩格式互转**：在 ZIP / 7Z / TAR.GZ / TAR.XZ / JAR 之间互转，右侧选目标格式；`.jar` `.7z` `.xz` 都能直接拖进来
+- **试 ZPAQ 密码**：给忘了密码的 `.zpaq` 用
+  - 填数字范围（起 ～ 止，两端都算）、可选前缀 / 后缀、可选补零位数（填 4 就是 0001…）
+  - 程序拿 zpaq 自己逐个验证，找到就弹窗提示，并写出 `原名_密码_1234.txt`
+  - 只枚举纯数字；8 线程约 150～200 个/秒，1 万个数字约 1 分钟
+
+**文档与图片**
 - **图片合成 PDF**：JPG/PNG/BMP/GIF/TIFF/WEBP → `.pdf`（按原图尺寸成页）
 - **PDF 拆成图片**：PDF 每页导出 PNG/JPG（150 DPI）
 
-ZIP/TAR 是 Java 原生实现，PDF 用内置的 Apache PDFBox（打包进 jar），都不依赖外部程序。
+**校验与文本**
+- **计算哈希**（SHA-256 / MD5）、**校验哈希**（拿 `.sha256` / `.md5` 和原文件比对）
+- **Base64 编码 / 解码**
+- **生成二维码 / 识别二维码**
+- **批量重命名**（加三位序号前缀）、**改修改时间**
+
+**开发工具**
+- **NASM 汇编编译**：`.asm` → `.obj`（win64 格式）
+- **ISO 打包 / 解包 / 挂载**
+- **APK 签名**：v1 / v2 / v3，可先 zipalign 对齐
+
+压缩、哈希、二维码、PDF 全在 Java 里做（commons-compress / XZ / ZXing / PDFBox 都打进了 jar），
+只有 ZPAQ、NASM、ISO 挂载、APK 签名会用到 `app\tools\` 里的命令行程序。
 ### 其他
 - **输出格式不是写死的**：启动时读 `ffmpeg -encoders`，只把本机真的能编出来的格式列进下拉框（当前构建：图片 23 种、视频 16 容器 × 11 编码、音频 25 种，全部实测通过）
 - 并发数默认 = 本机逻辑核心数，可手动调低
@@ -70,12 +93,14 @@ javac -encoding UTF-8 --release 17 -cp "path\to\flatlaf.jar" -d build src\cn\gkk
 # 2. 打 jar（需要把 FlatLaf 的 classes、图标、mask 一起放进去，见 manifest.txt）
 jar --create --file GkkAudioStudio.jar --manifest manifest.txt -C stage .
 
-# 3. 生成 app-image / 安装包（需要 WiX 3 在 PATH 里）
-jpackage --type exe --name "格式作坊" --app-version 2.0.0 `
+# 3. 生成 app-image / 安装包（需要 WiX 在 PATH 里；WiX 3 的 candle/light 或 WiX 4/5 的 wix.exe 都认）
+jpackage --type exe --name "格式作坊" --app-version 2.3.2 `
   --input installer-input --main-jar GkkAudioStudio.jar --main-class cn.gkkstudio.GkkMp3App `
   --icon format-converter.ico --runtime-image runtime --dest dist `
   --win-dir-chooser --win-menu --win-shortcut
 ```
+
+`--type msi` 只出 `.msi`，`--type exe` 则是 MSI 外面再套一层安装器（另有 `--win-per-user-install` 可装进 `%LOCALAPPDATA%`）。
 
 ### 解密与转换是怎么实现的
 
@@ -101,6 +126,7 @@ jpackage --type exe --name "格式作坊" --app-version 2.0.0 `
 - HEIC / AVIF 依赖 FFmpeg 版本，当前内置的 9.0 不解这两个
 - 视频编码只用 CPU（x264 / VP9），没有硬编码
 - QQ 音乐 19.57 之后的 `.mflac` 需要登录态（ekey 不内嵌），程序会提示缺少凭据
+- 试 ZPAQ 密码只枚举纯数字（可加前后缀），不试字母和符号组合
 - 安装包没有代码签名，首次运行 Windows 会提示“未知发布者”
 
 ## 免责声明

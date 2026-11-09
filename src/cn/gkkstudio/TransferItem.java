@@ -15,6 +15,8 @@ final class TransferItem {
     volatile String detail = "等待转换";
     volatile Path output;
     volatile Process process;
+    /** 完成后想显示的一句话（例如找回的密码）；为空时用默认的“已完成”。 */
+    volatile String note;
 
     TransferItem(Path path) {
         this.source = path;

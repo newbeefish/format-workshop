@@ -13,7 +13,7 @@ final class Formats {
             "tif", "tiff", "webp", "ico", "cur", "tga", "icb", "vda", "vst",
             "ppm", "pgm", "pbm", "pnm", "pfm", "pcx", "dds", "exr", "hdr",
             "pic", "psd", "qoi", "sgi", "rgb", "rgba", "bw", "ras", "sun",
-            "xbm", "xpm", "jp2", "j2k", "j2c", "dpx", "cin", "pam", "pict");
+            "xbm", "xpm", "jp2", "j2k", "j2c", "dpx", "cin", "pam", "pict", "avif", "heic", "heif", "hif");
 
     static final Set<String> VIDEO = Set.of(
             "mp4", "m4v", "mov", "qt", "mkv", "webm", "avi", "divx", "xvid",

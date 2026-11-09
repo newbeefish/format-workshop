@@ -31,7 +31,7 @@ final class Targets {
     private static final List<String> IMAGE_ORDER = List.of(
             "png", "jpg", "jpeg", "webp", "bmp", "tiff", "tif", "gif", "tga",
             "ppm", "pgm", "pbm", "pnm", "pcx", "dds", "exr", "hdr", "jp2", "j2k",
-            "dpx", "qoi", "psd", "sgi", "sun", "xbm", "xpm", "pam", "pict", "pfm",
+            "dpx", "qoi", "psd", "sgi", "sun", "xbm", "xpm", "pam", "pict", "pfm", "avif",
             "jfif", "jpe");
 
     private static final List<String> VIDEO_ORDER = List.of(
@@ -103,7 +103,7 @@ final class Targets {
             Map.entry("gif", "gif"), Map.entry("bmp", "bmp"),
             Map.entry("tif", "tiff"), Map.entry("tiff", "tiff"),
             Map.entry("pnm", "pnm"), Map.entry("ppm", "ppm"),
-            Map.entry("pgm", "pgm"), Map.entry("pbm", "pbm"));
+            Map.entry("pgm", "pgm"), Map.entry("pbm", "pbm"), Map.entry("avif", "libaom-av1"));
 
     private static volatile Set<String> availableEncoders;
 
@@ -204,22 +204,20 @@ final class Targets {
         if (mode == Mode.IMAGE) {
             return extension.toUpperCase(java.util.Locale.ROOT) + " · " + ImageCatalog.of(extension).note();
         }
-        String note = switch (extension) {
-            case "mp4" -> " · H.264";
-            case "mkv" -> " · 通用封装";
-            case "webm" -> " · VP9";
-            case "gif" -> " · 动图无声音";
-            case "png" -> " · 无损";
-            case "jpg", "jpeg" -> " · 最通用";
-            case "webp" -> " · 体积小";
-            case "flac" -> " · 无损音频";
-            case "wav" -> " · 未压缩";
-            case "mp3" -> " · 通用音频";
-            case "aac", "m4a" -> " · 高效";
-            case "opus" -> " · 低码率强";
+        String note = mode == Mode.AUDIO
+                ? AudioCatalog.note(extension)
+                : videoNote(extension);
+        return extension.toUpperCase(java.util.Locale.ROOT) + (note.isEmpty() ? "" : " · " + note);
+    }
+
+    private static String videoNote(String extension) {
+        return switch (extension) {
+            case "mp4" -> "H.264";
+            case "mkv" -> "通用封装";
+            case "webm" -> "VP9";
+            case "gif" -> "动图无声音";
             default -> "";
         };
-        return extension.toUpperCase(java.util.Locale.ROOT) + note;
     }
 
     static boolean usesQuality(Mode mode, Target target) {
@@ -264,6 +262,7 @@ final class Targets {
             case "pgm" -> List.of("-c:v", "pgm");
             case "pbm" -> List.of("-c:v", "pbm");
             case "pnm" -> List.of("-c:v", "pnm");
+            case "avif" -> List.of("-c:v", "libaom-av1", "-crf", String.valueOf(quality.mjpegQ * 4), "-still-picture", "1");
             case "ppm" -> List.of("-c:v", "ppm");
             default -> List.of("-c:v", "png", "-compression_level", "6");
         };
