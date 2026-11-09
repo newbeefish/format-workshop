@@ -45,6 +45,7 @@ final class MainFrame extends JFrame {
     private final Path logsDirectory = this.rootDirectory.resolve("logs");
 
     private final Map<Mode, ConversionView> views = new EnumMap<>(Mode.class);
+    private MiscView miscView;
     private final Map<Mode, NavItem> navItems = new EnumMap<>(Mode.class);
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cards = new JPanel(this.cardLayout);
@@ -69,7 +70,7 @@ final class MainFrame extends JFrame {
     }
 
     MainFrame(List<Path> initialFiles, Mode forcedMode) {
-        super("格式作坊 · 图片 / 视频 / 音频 转换");
+        super("格式作坊 · 图片 / 视频 / 音频 / 杂项");
         this.setIconImages(UiKit.appIcons());
         this.tools = SystemCapabilities.detect();
         this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -83,6 +84,8 @@ final class MainFrame extends JFrame {
             this.cards.add(view, mode.name());
         }
 
+        this.miscView = new MiscView(this.rootDirectory);
+        this.cards.add(this.miscView, "MISC");
         this.setContentPane(this.buildRoot());
         this.switchTo(initialMode(initialFiles, forcedMode));
         this.updateCapabilities();
@@ -106,6 +109,9 @@ final class MainFrame extends JFrame {
                     }
                 }
                 MainFrame.this.views.values().forEach(view -> view.engine().close());
+        if (MainFrame.this.miscView != null) {
+            MainFrame.this.miscView.engine().close();
+        }
                 MainFrame.this.dispose();
             }
         });
@@ -179,7 +185,7 @@ final class MainFrame extends JFrame {
         logo.setAlignmentX(Component.LEFT_ALIGNMENT);
         panel.add(logo);
 
-        JLabel subtitle = new JLabel("Universal Converter 2.0");
+        JLabel subtitle = new JLabel("Universal Converter 2.1.0");
         subtitle.setForeground(UiKit.MUTED);
         subtitle.setFont(subtitle.getFont().deriveFont(11.0f));
         subtitle.setBorder(new EmptyBorder(10, 0, 6, 0));
@@ -199,6 +205,12 @@ final class MainFrame extends JFrame {
             panel.add(item);
             panel.add(Box.createVerticalStrut(8));
         }
+        JButton miscButton = UiKit.secondaryButton("杂项处理");
+        miscButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+        miscButton.setMaximumSize(new Dimension(166, 38));
+        miscButton.setPreferredSize(new Dimension(166, 38));
+        miscButton.addActionListener(event -> this.switchToMisc());
+        panel.add(miscButton);
         panel.add(Box.createVerticalStrut(12));
 
         this.openOutputButton.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -299,6 +311,13 @@ final class MainFrame extends JFrame {
     }
 
     // ------------------------------------------------------------------ 切换与弹窗
+
+    private void switchToMisc() {
+        this.cardLayout.show(this.cards, "MISC");
+        this.headerTitle.setText("杂项处理");
+        this.headerSubtitle.setText("压缩包打包 / 解包 · PDF 拆图 · 图片合成 PDF");
+        this.navItems.forEach((key, item) -> item.setActive(false));
+    }
 
     private void switchTo(Mode mode) {
         this.activeMode = mode;
