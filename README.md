@@ -87,4 +87,8 @@ jpackage --type exe --name "格式作坊" --app-version 2.0.0 `
 
 ## 许可
 
-源码以 MIT 许可发布；FFmpeg 及其它第三方工具遵循各自的许可证（FFmpeg 为 LGPL/GPL）。
+本项目以 **GNU General Public License v3.0** 发布，完整条款见 [LICENSE](LICENSE)。
+
+你可以自由使用、修改、再分发，但衍生作品也须以 GPL-3.0 开源，且不提供任何担保。
+
+第三方组件遵循各自许可证：FFmpeg（LGPL/GPL，取决于编译选项）、FlatLaf（Apache-2.0），以及酷狗 / 网易云 / QQ 音乐解密所用的外部工具。
