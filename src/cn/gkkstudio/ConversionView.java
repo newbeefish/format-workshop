@@ -262,7 +262,7 @@ final class ConversionView extends JPanel {
     private JComponent buildSettingsCard() {
         UiKit.RoundedPanel panel = new UiKit.RoundedPanel(UiKit.SETTINGS, 28);
         panel.setLayout(new BorderLayout(0, 12));
-        panel.setPreferredSize(new Dimension(270, 0));
+        panel.setPreferredSize(new Dimension(308, 0));
         panel.setBorder(new EmptyBorder(20, 20, 18, 20));
 
         JPanel body = new JPanel();
@@ -279,18 +279,18 @@ final class ConversionView extends JPanel {
         body.add(UiKit.inspectorLabel(this.mode.formatLabel()));
         body.add(Box.createVerticalStrut(7));
         this.formatBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-        this.formatBox.setPreferredSize(new Dimension(226, 36));
+        this.formatBox.setPreferredSize(new Dimension(260, 34));
         this.formatBox.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.formatBox);
         body.add(Box.createVerticalStrut(9));
 
-        if (this.mode == Mode.VIDEO) {
-            this.codecLabel = UiKit.inspectorLabel("视频编码");
+        if (this.mode != Mode.IMAGE) {
+            this.codecLabel = UiKit.inspectorLabel(this.mode == Mode.VIDEO ? "视频编码" : "音频编码");
             this.codecLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
             body.add(this.codecLabel);
             body.add(Box.createVerticalStrut(7));
             this.codecBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-            this.codecBox.setPreferredSize(new Dimension(226, 36));
+            this.codecBox.setPreferredSize(new Dimension(260, 34));
             this.codecBox.setAlignmentX(Component.LEFT_ALIGNMENT);
             this.refreshCodecs();
             body.add(this.codecBox);
@@ -302,7 +302,7 @@ final class ConversionView extends JPanel {
             body.add(this.sizeLabel);
             body.add(Box.createVerticalStrut(7));
             this.sizeBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-            this.sizeBox.setPreferredSize(new Dimension(226, 36));
+            this.sizeBox.setPreferredSize(new Dimension(260, 34));
             this.sizeBox.setAlignmentX(Component.LEFT_ALIGNMENT);
             body.add(this.sizeBox);
             body.add(Box.createVerticalStrut(9));
@@ -312,7 +312,7 @@ final class ConversionView extends JPanel {
         body.add(this.qualityLabel);
         body.add(Box.createVerticalStrut(7));
         this.qualityBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-        this.qualityBox.setPreferredSize(new Dimension(226, 36));
+        this.qualityBox.setPreferredSize(new Dimension(260, 34));
         this.qualityBox.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.qualityBox);
         body.add(Box.createVerticalStrut(8));
@@ -328,7 +328,7 @@ final class ConversionView extends JPanel {
         this.outputField.putClientProperty("JTextField.placeholderText", "输出文件夹");
         this.outputField.setToolTipText("转换后的文件保存到这里");
         this.outputField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-        this.outputField.setPreferredSize(new Dimension(226, 34));
+        this.outputField.setPreferredSize(new Dimension(260, 34));
         this.outputField.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.outputField);
         body.add(Box.createVerticalStrut(7));
@@ -375,15 +375,15 @@ final class ConversionView extends JPanel {
         this.overallProgress.setForeground(UiKit.PRIMARY);
         this.overallProgress.setBackground(UiKit.TRACK);
         this.overallProgress.setMaximumSize(new Dimension(Integer.MAX_VALUE, 8));
-        this.overallProgress.setPreferredSize(new Dimension(226, 8));
+        this.overallProgress.setPreferredSize(new Dimension(260, 8));
         this.overallProgress.setAlignmentX(Component.CENTER_ALIGNMENT);
         this.overallProgress.setVisible(false);
 
-        this.startButton.setPreferredSize(new Dimension(226, 44));
+        this.startButton.setPreferredSize(new Dimension(260, 42));
         this.startButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
         this.startButton.setFont(this.startButton.getFont().deriveFont(Font.BOLD, 14.0f));
         this.startButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-        this.cancelButton.setPreferredSize(new Dimension(226, 36));
+        this.cancelButton.setPreferredSize(new Dimension(260, 34));
         this.cancelButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         this.cancelButton.setVisible(false);
         this.cancelButton.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -432,7 +432,7 @@ final class ConversionView extends JPanel {
         this.startButton.addActionListener(event -> this.startConversion());
         this.cancelButton.addActionListener(event -> this.engine.cancel(this.items));
         this.formatBox.addActionListener(event -> {
-            if (this.mode == Mode.VIDEO) {
+            if (this.mode != Mode.IMAGE) {
                 this.refreshCodecs();
             }
             this.updateOptionControls();
@@ -449,16 +449,35 @@ final class ConversionView extends JPanel {
     /** 容器换了以后，只保留这个容器支持的编码。 */
     private void refreshCodecs() {
         Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
-        String extension = target == null ? "mp4" : target.extension();
-        VideoCatalog.Container container = VideoCatalog.container(extension);
+        if (this.mode == Mode.IMAGE || target == null) {
+            return;
+        }
+        String extension = target.extension();
         Object previous = this.codecBox.getSelectedItem();
         this.codecBox.removeAllItems();
-        for (VideoCatalog.Codec codec : container.codecs()) {
-            this.codecBox.addItem(codec);
+        if (this.mode == Mode.VIDEO) {
+            for (VideoCatalog.Codec codec : VideoCatalog.container(extension).codecs()) {
+                this.codecBox.addItem(codec);
+            }
+        } else {
+            List<AudioCatalog.Codec> codecs = AudioCatalog.codecs(extension);
+            if (codecs == null) {
+                this.codecBox.addItem(new AudioCatalog.Codec("default", "默认编码（FFmpeg 自动）", java.util.List.of()));
+            } else {
+                for (AudioCatalog.Codec codec : codecs) {
+                    this.codecBox.addItem(codec);
+                }
+            }
         }
-        if (previous instanceof VideoCatalog.Codec old) {
+        this.codecBox.setEnabled(this.codecBox.getItemCount() > 1 && !this.running);
+        if (previous != null) {
+            String oldId = previous instanceof VideoCatalog.Codec video ? video.id()
+                    : previous instanceof AudioCatalog.Codec audio ? audio.id() : "";
             for (int i = 0; i < this.codecBox.getItemCount(); i++) {
-                if (((VideoCatalog.Codec) this.codecBox.getItemAt(i)).id().equals(old.id())) {
+                Object item = this.codecBox.getItemAt(i);
+                String id = item instanceof VideoCatalog.Codec video ? video.id()
+                        : item instanceof AudioCatalog.Codec audio ? audio.id() : "";
+                if (!id.isEmpty() && id.equals(oldId)) {
                     this.codecBox.setSelectedIndex(i);
                     break;
                 }
@@ -486,16 +505,8 @@ final class ConversionView extends JPanel {
             case IMAGE -> {
                 String extension = target == null ? "png" : target.extension();
                 this.qualityLabel.setText(qualityEnabled ? "画质（JPG / WEBP）" : "画质（当前格式不使用）");
-                hint = switch (extension) {
-                    case "png" -> "<html>PNG 无损，体积较大。<br>适合截图、需要透明背景的素材。</html>";
-                    case "jpg", "jpeg", "jpe", "jfif" -> "<html>JPG 最通用，体积小。<br>透明区域会变成白色。</html>";
-                    case "webp" -> "<html>WEBP 同画质体积最小。<br>Win10 以后原生支持。</html>";
-                    case "bmp", "dib" -> "<html>BMP 无压缩位图。<br>体积很大，仅作兼容用。</html>";
-                    case "tif", "tiff" -> "<html>TIFF 适合印刷、后期。<br>体积较大。</html>";
-                    case "gif" -> "<html>GIF 只保留第一帧。<br>要动图请用视频板块。</html>";
-                    default -> "<html>" + extension.toUpperCase(java.util.Locale.ROOT)
-                            + " 由 FFmpeg 直接写出。<br>冷门格式部分播放器可能不认。</html>";
-                };
+                ImageCatalog.Info info = ImageCatalog.of(extension);
+                hint = "<html>" + brief(info.pros(), 22) + "<br>缺点：" + brief(info.cons(), 18) + "</html>";
             }
             case VIDEO -> {
                 String extension = target == null ? "mp4" : target.extension();
@@ -504,17 +515,16 @@ final class ConversionView extends JPanel {
                 boolean gif = "gif".equals(container.extension());
                 this.qualityLabel.setText(gif ? "质量（GIF 不使用）" : "质量");
                 hint = "<html>" + container.label().split(" · ")[0] + "："
-                        + brief(container.pros(), 18) + "；缺点：" + brief(container.cons(), 14)
+                        + brief(container.pros(), 18) + "<br>缺点：" + brief(container.cons(), 16)
                         + (codec == null ? "" : "<br>" + codec.tag() + "：" + brief(codec.pros(), 20))
                         + "</html>";
             }
             default -> {
-                boolean mp3 = target != null && "mp3".equals(target.extension());
-                this.qualityLabel.setText("音质（仅 MP3）");
-                hint = mp3
-                        ? "<html>原始 MP3 直接无损输出。<br>其他音频按所选音质编码。</html>"
-                        : "<html>" + (target == null ? "" : target.label())
-                                + " 使用固定参数导出，<br>音质档位不生效。</html>";
+                String ext = target == null ? "mp3" : target.extension();
+                boolean mp3 = "mp3".equals(ext);
+                this.qualityLabel.setText(mp3 ? "音质（MP3 生效）" : "音质（当前编码不生效）");
+                AudioCatalog.Info info = AudioCatalog.info(ext);
+                hint = "<html>" + brief(info.pros(), 22) + "<br>缺点：" + brief(info.cons(), 18) + "</html>";
             }
         }
         this.qualityBox.setEnabled(qualityEnabled && !this.running);
@@ -560,6 +570,7 @@ final class ConversionView extends JPanel {
         this.codecBox.setEnabled(!busy);
         this.sizeBox.setEnabled(!busy);
         this.qualityBox.setEnabled(!busy && this.qualityEnabled());
+        this.codecBox.setEnabled(!busy && this.codecBox.getItemCount() > 1);
         this.concurrencySpinner.setEnabled(!busy);
         this.sourceDirectory.setEnabled(!busy);
         this.outputField.setEnabled(!busy && !this.sourceDirectory.isSelected());
@@ -621,7 +632,12 @@ final class ConversionView extends JPanel {
             default -> {
                 AudioQuality quality = (AudioQuality) this.qualityBox.getSelectedItem();
                 extension = target.dotted();
-                args = Targets.audioArgs(target, quality);
+                Object selected = this.codecBox.getSelectedItem();
+                if (selected instanceof AudioCatalog.Codec codec && !"default".equals(codec.id())) {
+                    args = new ArrayList<>(codec.args());
+                } else {
+                    args = Targets.audioArgs(target, quality);
+                }
             }
         }
         return new MediaEngine.Settings(output, this.sourceDirectory.isSelected(),

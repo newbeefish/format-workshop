@@ -201,6 +201,9 @@ final class Targets {
     }
 
     private static String labelOf(Mode mode, String extension) {
+        if (mode == Mode.IMAGE) {
+            return extension.toUpperCase(java.util.Locale.ROOT) + " · " + ImageCatalog.of(extension).note();
+        }
         String note = switch (extension) {
             case "mp4" -> " · H.264";
             case "mkv" -> " · 通用封装";

@@ -74,7 +74,7 @@ final class MainFrame extends JFrame {
         this.tools = SystemCapabilities.detect();
         this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         this.setMinimumSize(new Dimension(1140, 780));
-        this.setSize(1260, 860);
+        this.setSize(1330, 880);
         this.setLocationRelativeTo(null);
 
         for (Mode mode : Mode.values()) {
