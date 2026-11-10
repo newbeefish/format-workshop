@@ -99,6 +99,10 @@ final class ConversionView extends JPanel {
     private final JLabel hintLabel = new JLabel();
     private static final int MAX_CONCURRENCY = Math.max(1, Runtime.getRuntime().availableProcessors());
 
+    /** 音频板块的「原样复制」：容器装得下源编码时直接封装。 */
+    private static final AudioCatalog.Codec COPY_AUDIO =
+            new AudioCatalog.Codec("copy", "原样复制 · 不重编码（最快）", java.util.List.of());
+
     private final JSpinner concurrencySpinner = new JSpinner(new SpinnerNumberModel(MAX_CONCURRENCY, 1, MAX_CONCURRENCY, 1));
 
     private boolean running;
@@ -456,10 +460,15 @@ final class ConversionView extends JPanel {
         Object previous = this.codecBox.getSelectedItem();
         this.codecBox.removeAllItems();
         if (this.mode == Mode.VIDEO) {
+            // GIF 只能重编码，不给「原样复制」这个选项
+            if (!"gif".equals(extension)) {
+                this.codecBox.addItem(VideoCatalog.COPY);
+            }
             for (VideoCatalog.Codec codec : VideoCatalog.container(extension).codecs()) {
                 this.codecBox.addItem(codec);
             }
         } else {
+            this.codecBox.addItem(COPY_AUDIO);
             List<AudioCatalog.Codec> codecs = AudioCatalog.codecs(extension);
             if (codecs == null) {
                 this.codecBox.addItem(new AudioCatalog.Codec("default", "默认编码（FFmpeg 自动）", java.util.List.of()));
@@ -499,7 +508,7 @@ final class ConversionView extends JPanel {
     }
     private void updateOptionControls() {
         Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
-        boolean qualityEnabled = target != null && Targets.usesQuality(this.mode, target);
+        boolean qualityEnabled = target != null && Targets.usesQuality(this.mode, target) && !this.copyPreferred();
         String hint;
         switch (this.mode) {
             case IMAGE -> {
@@ -518,6 +527,10 @@ final class ConversionView extends JPanel {
                         + brief(container.pros(), 18) + "<br>缺点：" + brief(container.cons(), 16)
                         + (codec == null ? "" : "<br>" + codec.tag() + "：" + brief(codec.pros(), 20))
                         + "</html>";
+                if (this.copyPreferred()) {
+                    hint = "<html>原样复制：容器装得下源编码时只换壳、不重编码（秒级）<br>"
+                            + "装不下或改过分辨率时，自动退回重编码</html>";
+                }
             }
             default -> {
                 String ext = target == null ? "mp3" : target.extension();
@@ -525,6 +538,10 @@ final class ConversionView extends JPanel {
                 this.qualityLabel.setText(mp3 ? "音质（MP3 生效）" : "音质（当前编码不生效）");
                 AudioCatalog.Info info = AudioCatalog.info(ext);
                 hint = "<html>" + brief(info.pros(), 22) + "<br>缺点：" + brief(info.cons(), 18) + "</html>";
+                if (this.copyPreferred()) {
+                    hint = "<html>原样复制：源音频装得进这个容器就直接封装，不重编码<br>"
+                            + "装不下（例如 FLAC 音轨进 MP4）时自动换成容器默认编码</html>";
+                }
             }
         }
         this.qualityBox.setEnabled(qualityEnabled && !this.running);
@@ -583,9 +600,16 @@ final class ConversionView extends JPanel {
         }
     }
 
+    /** 选了「原样复制」时，画质/音质这些编码参数没意义。 */
+    private boolean copyPreferred() {
+        Object selected = this.codecBox.getSelectedItem();
+        return selected instanceof VideoCatalog.Codec video ? "copy".equals(video.id())
+                : selected instanceof AudioCatalog.Codec audio && "copy".equals(audio.id());
+    }
+
     private boolean qualityEnabled() {
         Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
-        return target != null && Targets.usesQuality(this.mode, target);
+        return target != null && Targets.usesQuality(this.mode, target) && !this.copyPreferred();
     }
 
     private MediaEngine.Settings buildSettings() {
@@ -597,6 +621,8 @@ final class ConversionView extends JPanel {
         List<String> args;
         String filter = null;
         boolean image = this.mode == Mode.IMAGE;
+        String codecPreference = "";
+        List<String> videoCopyAudioArgs = List.of();
         Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
         if (target == null) {
             return null;
@@ -616,10 +642,13 @@ final class ConversionView extends JPanel {
                 VideoCatalog.Container container = VideoCatalog.container(target.extension());
                 VideoCatalog.Codec codec = (VideoCatalog.Codec) this.codecBox.getSelectedItem();
                 if (codec == null) {
-                    codec = VideoCatalog.H264;
+                    codec = VideoCatalog.COPY;
                 }
                 extension = target.dotted();
+                // 选「原样复制」时，这里的 args 只是容器装不下时的兜底重编码参数
                 args = VideoCatalog.args(container, codec, quality);
+                codecPreference = codec.id();
+                videoCopyAudioArgs = VideoCatalog.audioArgsList(container);
                 List<String> filters = new ArrayList<>();
                 if ("gif".equals(container.extension())) {
                     filters.add("fps=12");
@@ -633,7 +662,11 @@ final class ConversionView extends JPanel {
                 AudioQuality quality = (AudioQuality) this.qualityBox.getSelectedItem();
                 extension = target.dotted();
                 Object selected = this.codecBox.getSelectedItem();
-                if (selected instanceof AudioCatalog.Codec codec && !"default".equals(codec.id())) {
+                if (selected instanceof AudioCatalog.Codec codec) {
+                    codecPreference = codec.id();
+                }
+                if (selected instanceof AudioCatalog.Codec codec
+                        && !"default".equals(codec.id()) && !"copy".equals(codec.id())) {
                     args = new ArrayList<>(codec.args());
                 } else {
                     args = Targets.audioArgs(target, quality);
@@ -642,7 +675,7 @@ final class ConversionView extends JPanel {
         }
         return new MediaEngine.Settings(output, this.sourceDirectory.isSelected(),
                 (Integer) this.concurrencySpinner.getValue(), this.mode, extension, args, filter,
-                image, this.mode == Mode.AUDIO);
+                image, this.mode == Mode.AUDIO, codecPreference, videoCopyAudioArgs);
     }
 
     private Path resolveOutputDirectory() {

@@ -91,7 +91,14 @@ final class VideoCatalog {
             "只有 256 色、没有声音、体积大",
             "特性：只导出 12 帧/秒，适合短表情包");
 
-    static final List<Codec> ALL_CODECS = List.of(H264, H265, VP9, AV1, MPEG4, MPEG2, PRORES, WMV2, THEORA, DVVIDEO, GIF);
+    /** 「原样复制」不是一个编码器，而是一条捷径：容器装得下源编码就直接封装。 */
+    static final Codec COPY = new Codec("copy", "原样复制 · 不重编码（最快）",
+            "同源编码",
+            "只换容器，几秒完成，画质一点都不损失",
+            "容器装不下源编码、或改过分辨率时会自动退回重编码",
+            "特性：TS / M4S / MKV / HEVC 这类“只想换个壳”的场景首选");
+
+    static final List<Codec> ALL_CODECS = List.of(COPY, H264, H265, VP9, AV1, MPEG4, MPEG2, PRORES, WMV2, THEORA, DVVIDEO, GIF);
 
     private static final String AAC = "-c:a aac -b:a 160k";
     private static final String OPUS = "-c:a libopus -b:a 128k";
@@ -180,6 +187,22 @@ final class VideoCatalog {
         return H264;
     }
 
+    /** 容器默认音轨参数（列表形式，供“只封装视频、音轨重编码”使用）。 */
+    static List<String> audioArgsList(Container container) {
+        String text = audioArgs(container);
+        return List.of(text.split(" "));
+    }
+
+    /** 容器装不下「原样复制」时，退回用哪个编码器。 */
+    static Codec fallbackCodec(Container container) {
+        for (Codec codec : container.codecs()) {
+            if (codec != GIF) {
+                return codec;
+            }
+        }
+        return H264;
+    }
+
     /** 音轨编码跟着容器走。 */
     private static String audioArgs(Container container) {
         return switch (container.extension()) {
@@ -201,7 +224,8 @@ final class VideoCatalog {
             args.addAll(List.of("-c:v", "gif", "-loop", "0", "-an"));
             return args;
         }
-        switch (codec.id()) {
+        Codec effective = "copy".equals(codec.id()) ? fallbackCodec(container) : codec;
+        switch (effective.id()) {
             case "libx264" -> args.addAll(List.of("-c:v", "libx264", "-crf", String.valueOf(quality.crf),
                     "-preset", "medium", "-pix_fmt", "yuv420p"));
             case "libx265" -> {

@@ -46,7 +46,11 @@ final class MediaEngine implements AutoCloseable {
             List<String> outputArgs,
             String videoFilter,
             boolean imageJob,
-            boolean allowDirectCopy) {
+            boolean allowDirectCopy,
+            /** 用户选的编码 id；"copy" 表示「原样复制，不重编码」。 */
+            String codecPreference,
+            /** 视频原样封装、音轨必须重编码时用的音频参数。 */
+            List<String> videoCopyAudioArgs) {
     }
 
     interface Listener {
@@ -185,15 +189,33 @@ final class MediaEngine implements AutoCloseable {
             Path target = uniqueOutput(outputDirectory, baseName, settings.targetExtension());
             ProbeInfo probe = probe(resolved.path());
             String sourceExtension = resolved.temporary()
-                    ? extensionForCodec(probe.codec(), extension(resolved.path()))
+                    ? extensionForCodec(probe.audio(), extension(resolved.path()))
                     : extension(resolved.path());
 
             item.progress = 16;
             item.detail = resolved.description();
             notifyChanged(item, listener);
 
+            String container = settings.targetExtension().startsWith(".")
+                    ? settings.targetExtension().substring(1)
+                    : settings.targetExtension();
+
+            // 图片：本来就是目标格式、又没缩放 → 直接复制，别白跑一次编码
+            if (settings.imageJob()
+                    && (settings.videoFilter() == null || settings.videoFilter().isBlank())
+                    && sourceExtension.equalsIgnoreCase(container)) {
+                Files.copy(resolved.path(), target, StandardCopyOption.REPLACE_EXISTING);
+                item.progress = 100;
+                item.state = TransferItem.State.DONE;
+                item.detail = "已经是 ." + container + "，直接复制 · " + humanSize(Files.size(target));
+                item.output = target;
+                addLine("[信息] 直接复制：" + target.getFileName());
+                return;
+            }
+
+            // 音频：同格式直接复制
             if (settings.allowDirectCopy()
-                    && sourceExtension.equalsIgnoreCase(settings.targetExtension().substring(1))
+                    && sourceExtension.equalsIgnoreCase(container)
                     && AUDIO_EXTENSIONS.contains(sourceExtension)) {
                 Files.copy(resolved.path(), target, StandardCopyOption.REPLACE_EXISTING);
                 item.progress = 100;
@@ -204,9 +226,24 @@ final class MediaEngine implements AutoCloseable {
                 return;
             }
 
+            // 视频 / 音频：能只换容器就不重编码（-c copy），这是最快的一条路
+            boolean copyPreferred = "copy".equals(settings.codecPreference());
+            boolean resized = settings.videoFilter() != null && !settings.videoFilter().isBlank();
+            FastPath.Decision decision = switch (settings.mode()) {
+                case VIDEO -> FastPath.decideVideo(container, probe.video(), probe.audio(), copyPreferred, resized);
+                case AUDIO -> FastPath.decideAudio(container, probe.audio(), copyPreferred);
+                case IMAGE -> new FastPath.Decision(FastPath.Kind.ENCODE, "");
+            };
+            List<String> codecArgs = decision.copying()
+                    ? copyArguments(settings, container, decision.kind() == FastPath.Kind.COPY_ALL)
+                    : settings.outputArgs();
+            if (!decision.note().isEmpty()) {
+                addLine("[信息] " + item.fileName() + "：" + decision.note());
+            }
+
             item.state = TransferItem.State.CONVERTING;
             item.progress = settings.imageJob() ? 45 : 18;
-            item.detail = settings.imageJob() ? "编码中…" : "准备编码";
+            item.detail = decision.copying() ? "直接封装…" : (settings.imageJob() ? "编码中…" : "准备编码");
             notifyChanged(item, listener);
 
             partFile = target.resolveSibling(baseName + ".part" + settings.targetExtension());
@@ -214,7 +251,14 @@ final class MediaEngine implements AutoCloseable {
 
             List<String> command = new ArrayList<>();
             command.add(this.tools.ffmpeg().toString());
-            command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin", "-i", effectiveInput(resolved.path()).toString()));
+            if (decision.copying()) {
+                // TS / 分片流的时间戳常常是乱的，封装前先让 ffmpeg 重新生成
+                command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+                        "-fflags", "+genpts", "-i", effectiveInput(resolved.path()).toString()));
+            } else {
+                command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+                        "-i", effectiveInput(resolved.path()).toString()));
+            }
             if (settings.imageJob()) {
                 command.addAll(List.of("-frames:v", "1"));
             } else if (settings.mode() == Mode.VIDEO) {
@@ -225,12 +269,13 @@ final class MediaEngine implements AutoCloseable {
             if (settings.videoFilter() != null && !settings.videoFilter().isBlank()) {
                 command.addAll(List.of("-vf", settings.videoFilter()));
             }
-            command.addAll(settings.outputArgs());
-            if (settings.mode() == Mode.AUDIO && settings.targetExtension().equals(".mp3")) {
+            command.addAll(codecArgs);
+            if (settings.mode() == Mode.AUDIO && !decision.copying() && container.equalsIgnoreCase("mp3")) {
                 command.addAll(List.of("-id3v2_version", "3", "-write_id3v1", "1"));
             }
             command.addAll(List.of("-progress", "pipe:1", "-nostats", partFile.toString()));
-            addLine("[信息] 正在转换：" + item.fileName() + " -> " + settings.targetExtension());
+            addLine("[信息] 正在" + (decision.copying() ? "封装" : "转换") + "：" + item.fileName()
+                    + " -> " + settings.targetExtension());
 
             Process process = new ProcessBuilder(command).start();
             item.process = process;
@@ -272,8 +317,8 @@ final class MediaEngine implements AutoCloseable {
             item.output = target;
             item.state = TransferItem.State.DONE;
             item.progress = 100;
-            item.detail = "已保存 · " + humanSize(Files.size(target));
-            addLine("[信息] 已保存：" + target);
+            item.detail = (decision.copying() ? "已封装 · " : "已保存 · ") + humanSize(Files.size(target));
+            addLine("[信息] " + (decision.copying() ? "已封装：" : "已保存：") + target);
         } catch (InterruptedException | CancellationException exception) {
             Thread.currentThread().interrupt();
             item.state = TransferItem.State.CANCELLED;
@@ -291,6 +336,28 @@ final class MediaEngine implements AutoCloseable {
             deleteQuietly(temporary);
             notifyChanged(item, listener);
         }
+    }
+
+    /** 组装「原样封装」的参数：视频/音频都 copy，或者只 copy 视频、音频重编码。 */
+    private static List<String> copyArguments(Settings settings, String container, boolean copyAudio) {
+        List<String> args = new ArrayList<>();
+        if (settings.mode() == Mode.VIDEO) {
+            args.addAll(List.of("-c:v", "copy"));
+            if (copyAudio) {
+                args.addAll(List.of("-c:a", "copy"));
+            } else if (settings.videoCopyAudioArgs() != null && !settings.videoCopyAudioArgs().isEmpty()) {
+                args.addAll(settings.videoCopyAudioArgs());
+            } else {
+                args.addAll(List.of("-an"));
+            }
+        } else {
+            args.addAll(List.of("-c:a", "copy"));
+        }
+        args.addAll(FastPath.copyArgs());
+        if (FastPath.wantsFastStart(container)) {
+            args.addAll(List.of("-movflags", "+faststart"));
+        }
+        return args;
     }
 
     private record ResolvedInput(Path path, boolean temporary, String description) {
@@ -517,12 +584,12 @@ final class MediaEngine implements AutoCloseable {
         }
     }
 
-    private record ProbeInfo(double duration, String codec) {
+    private record ProbeInfo(double duration, String video, String audio) {
     }
 
     private ProbeInfo probe(Path path) {
         if (this.tools.ffmpeg() == null) {
-            return new ProbeInfo(-1.0, "");
+            return new ProbeInfo(-1.0, "", "");
         }
         try {
             // 不再单独携带 ffprobe：直接读 ffmpeg -i 的信息输出。
@@ -541,17 +608,20 @@ final class MediaEngine implements AutoCloseable {
         } catch (Exception ignored) {
             // 探测失败时退化为无进度百分比
         }
-        return new ProbeInfo(-1.0, "");
+        return new ProbeInfo(-1.0, "", "");
     }
 
     private static final java.util.regex.Pattern DURATION_PATTERN =
             java.util.regex.Pattern.compile("Duration:\\s*(\\d+):(\\d{2}):(\\d{2}(?:\\.\\d+)?)");
     private static final java.util.regex.Pattern AUDIO_STREAM_PATTERN =
             java.util.regex.Pattern.compile("Stream #\\d+:\\d+.*?: Audio: ([A-Za-z0-9_]+)");
+    private static final java.util.regex.Pattern VIDEO_STREAM_PATTERN =
+            java.util.regex.Pattern.compile("Stream #\\d+:\\d+.*?: Video: ([A-Za-z0-9_]+)");
 
     private static ProbeInfo parseProbe(String text) {
         double duration = -1.0;
-        String codec = "";
+        String video = "";
+        String audio = "";
         java.util.regex.Matcher durationMatcher = DURATION_PATTERN.matcher(text);
         if (durationMatcher.find()) {
             try {
@@ -562,11 +632,15 @@ final class MediaEngine implements AutoCloseable {
                 duration = -1.0;
             }
         }
-        java.util.regex.Matcher codecMatcher = AUDIO_STREAM_PATTERN.matcher(text);
-        if (codecMatcher.find()) {
-            codec = codecMatcher.group(1);
+        java.util.regex.Matcher audioMatcher = AUDIO_STREAM_PATTERN.matcher(text);
+        if (audioMatcher.find()) {
+            audio = audioMatcher.group(1);
         }
-        return new ProbeInfo(duration, codec);
+        java.util.regex.Matcher videoMatcher = VIDEO_STREAM_PATTERN.matcher(text);
+        if (videoMatcher.find()) {
+            video = videoMatcher.group(1);
+        }
+        return new ProbeInfo(duration, video, audio);
     }
 
     /** 头部判断新版 KGG v5（KGM/VPR 魔数 + 版本号 5）。 */

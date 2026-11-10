@@ -1,6 +1,6 @@
 # 格式作坊 · Format Workshop
 
-> 当前版本 2.3.2（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
+> 当前版本 2.3.3（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
 
 一个纯本地运行的 Windows 图形化格式转换工具，界面用 Java Swing + FlatLaf 手写（紫色主题、玻璃拟态），
 内核全部走 **FFmpeg**，另外内置酷狗 / 网易云 / QQ 音乐加密格式的解密能力。
@@ -23,6 +23,9 @@
   - 容器 16 种：MP4 / MKV / MOV / WEBM / AVI / FLV / WMV / TS / M2TS / MPG / 3GP / OGV / MXF / NUT / DV / GIF
   - 编码 11 种：H.264 / H.265(HEVC) / VP9 / AV1 / MPEG-4 / MPEG-2 / ProRes / WMV2 / Theora / DV / GIF
   - 容器换掉以后只显示它支持的编码，界面上每一项都标了优缺点（例如 “H.264 · 兼容最广 · 硬解普遍”）
+- **能只换壳就不重编码**：编码下拉框默认「原样复制 · 不重编码（最快）」。TS / M4S / MKV / MP4 互换、HEVC 保持 HEVC 这类场景直接 `-c copy`，几秒完成、画质零损失；
+  只有容器装不下源编码（例如 VP9 进 MP4）或改过分辨率时才退回重编码
+- 音轨也跟着容器走：MKV(H.264+FLAC)→MP4 会「视频直封装 + FLAC 重编码成 AAC」，只有一条音轨需要转
 - GIF 只在视频板块提供（会按 12fps 抽帧），图片板块不产出 GIF
 - 画质：高质量（CRF 18）/ 标准（23）/ 小体积（28）
 - 分辨率：原尺寸 / 1080p / 720p / 480p
@@ -31,6 +34,7 @@
 - 输入：mp3 / wav / flac / aac / m4a / ogg / opus / wma / ape / ac3 / dts / amr …
 - 输出：MP3、WAV、FLAC、AAC、M4A、OGG、OPUS、WMA、AIFF、AC3、EAC3、MP2、AMR、AU、MKA、TTA、SPX、CAF …（共 25 种）
 - 每种格式后面都带一句短说明（MP3 · 通用音频 / FLAC · 无损音频 / OPUS · 低码率强 …），右侧还会列出它的优缺点
+- **换容器不重编码**：AAC→M4A/MKA、MP3→WAV 之外只换壳的场景直接封装；FLAC→MP3 这种必须解码重编码的才会慢
 - 视频文件也能直接选音频板块，自动抽音轨
 - 加密格式自动解密：
   - 酷狗：`.kgg` `.gkk` `.kgm` `.kgma` `.kge` `.kgtemp` `.vpr`
@@ -126,6 +130,7 @@ jpackage --type exe --name "格式作坊" --app-version 2.3.2 `
 - HEIC / AVIF 依赖 FFmpeg 版本，当前内置的 9.0 不解这两个
 - 视频编码只用 CPU（x264 / VP9），没有硬编码
 - QQ 音乐 19.57 之后的 `.mflac` 需要登录态（ekey 不内嵌），程序会提示缺少凭据
+- 「原样复制」是按容器能装哪些编码来判断的：个别冷门组合（例如 AV1 进 MP4）能封装但老播放器未必认，需要兼容性时手动选编码重编码
 - 试 ZPAQ 密码只枚举纯数字（可加前后缀），不试字母和符号组合
 - 安装包没有代码签名，首次运行 Windows 会提示“未知发布者”
 
