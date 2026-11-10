@@ -79,7 +79,7 @@ final class MainFrame extends JFrame {
         this.setLocationRelativeTo(null);
 
         for (Mode mode : Mode.values()) {
-            ConversionView view = new ConversionView(mode, this.tools, this.rootDirectory);
+            ConversionView view = new ConversionView(mode, this.tools, this.rootDirectory, this::routeFiles);
             this.views.put(mode, view);
             this.cards.add(view, mode.name());
         }
@@ -311,6 +311,20 @@ final class MainFrame extends JFrame {
     }
 
     // ------------------------------------------------------------------ 切换与弹窗
+
+    /** 别的板块认出来这批文件属于这个板块：切过去、加进队列、告诉用户一句。 */
+    private void routeFiles(Mode mode, java.util.List<Path> paths, String message) {
+        this.switchTo(mode);
+        ConversionView view = this.views.get(mode);
+        if (view == null) {
+            return;
+        }
+        view.addPaths(paths, true);
+        if (message != null && !message.isBlank()) {
+            javax.swing.JOptionPane.showMessageDialog(this, message, "帮你认了一下文件",
+                    javax.swing.JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
 
     private void switchToMisc() {
         this.cardLayout.show(this.cards, "MISC");

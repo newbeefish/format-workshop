@@ -20,7 +20,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Stream;
 import javax.swing.BorderFactory;
@@ -105,11 +107,23 @@ final class ConversionView extends JPanel {
 
     private final JSpinner concurrencySpinner = new JSpinner(new SpinnerNumberModel(MAX_CONCURRENCY, 1, MAX_CONCURRENCY, 1));
 
+    /** 把文件转交给别的板块（自动认文件时用）。 */
+    interface BoardRouter {
+        void route(Mode mode, java.util.List<Path> paths, String message);
+    }
+
+    private final BoardRouter router;
+
     private boolean running;
 
     ConversionView(Mode mode, SystemCapabilities.Toolchain tools, Path rootDirectory) {
+        this(mode, tools, rootDirectory, null);
+    }
+
+    ConversionView(Mode mode, SystemCapabilities.Toolchain tools, Path rootDirectory, BoardRouter router) {
         this.mode = mode;
         this.rootDirectory = rootDirectory;
+        this.router = router;
         this.outputDirectory = rootDirectory.resolve("output");
         this.engine = new MediaEngine(tools, rootDirectory.resolve("logs"));
 
@@ -735,6 +749,13 @@ final class ConversionView extends JPanel {
     }
 
     void addPaths(List<Path> paths) {
+        this.addPaths(paths, false);
+    }
+
+    /**
+     * @param autoRouted 这批文件是别的板块自动转过来的，不再往回路由，避免来回踢皮球
+     */
+    void addPaths(List<Path> paths, boolean autoRouted) {
         if (this.running) {
             return;
         }
@@ -743,7 +764,10 @@ final class ConversionView extends JPanel {
             known.add(item.source.toAbsolutePath().normalize());
         }
         List<Path> accepted = new ArrayList<>();
-        List<String> rejected = new ArrayList<>();
+        List<String> rejectedLabels = new ArrayList<>();
+        // 认出来属于别的板块的文件：板块 → 文件
+        Map<Mode, List<Path>> elsewhere = new LinkedHashMap<>();
+        List<String> elsewhereNotes = new ArrayList<>();
         for (Path path : paths) {
             try {
                 if (Files.isDirectory(path, new LinkOption[0])) {
@@ -754,36 +778,98 @@ final class ConversionView extends JPanel {
                     }
                     continue;
                 }
-                if (Files.isRegularFile(path, new LinkOption[0])) {
-                    if (this.supported(path) || this.readableForMode(path)) {
-                        accepted.add(path);
-                    } else {
-                        String extension = MediaEngine.extension(path);
-                        String label = extension.isEmpty() ? path.getFileName().toString() : "." + extension;
-                        if (!rejected.contains(label)) {
-                            rejected.add(label);
-                        }
-                    }
+                if (!Files.isRegularFile(path, new LinkOption[0])) {
+                    continue;
+                }
+                if (this.supported(path) || this.readableForMode(path)) {
+                    accepted.add(path);
+                    continue;
+                }
+                // 当前板块不收：先认一认它到底是什么
+                MediaProbe.Info info = MediaProbe.inspect(this.engine.ffmpegPath(), path);
+                Mode board = info.board();
+                if (!autoRouted && this.router != null && board != null && board != this.mode) {
+                    elsewhere.computeIfAbsent(board, key -> new ArrayList<>()).add(path);
+                    elsewhereNotes.add(MediaProbe.describe(path, info));
+                    continue;
+                }
+                String extension = MediaEngine.extension(path);
+                String label = extension.isEmpty() ? path.getFileName().toString() : "." + extension;
+                String line = label + "（" + info.summary() + "）";
+                if (!rejectedLabels.contains(line)) {
+                    rejectedLabels.add(line);
                 }
             } catch (Exception ignored) {
                 // 单个路径失败不影响其他文件
             }
         }
+        List<TransferItem> added = new ArrayList<>();
         for (Path path : accepted) {
             Path normalized = path.toAbsolutePath().normalize();
             if (known.add(normalized)) {
-                this.items.add(new TransferItem(normalized));
+                TransferItem item = new TransferItem(normalized);
+                this.items.add(item);
+                added.add(item);
             }
         }
         this.tableModel.fireTableDataChanged();
         this.refreshSummary();
-        // 全部被拒绝时给个明确提示，别让用户觉得“点了没反应”
-        if (accepted.isEmpty() && !rejected.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "“" + this.mode.title + "”不支持这些格式：\n" + String.join("、", rejected)
-                            + "\n\n" + this.mode.supportedHint(),
-                    "格式不支持", JOptionPane.WARNING_MESSAGE);
+        this.describeInputs(added);
+
+        // 认出来是别的板块的文件 → 交给主窗口切板块并加进去
+        if (!elsewhere.isEmpty()) {
+            Mode target = elsewhere.keySet().iterator().next();
+            List<Path> targets = new ArrayList<>();
+            for (List<Path> group : elsewhere.values()) {
+                targets.addAll(group);
+            }
+            StringBuilder message = new StringBuilder();
+            message.append("这些文件不是“").append(this.mode.shortName()).append("”，自动帮你去对板块：\n\n");
+            int show = Math.min(5, elsewhereNotes.size());
+            for (int index = 0; index < show; index++) {
+                message.append("  · ").append(elsewhereNotes.get(index)).append('\n');
+            }
+            if (elsewhereNotes.size() > show) {
+                message.append("  … 等 ").append(elsewhereNotes.size()).append(" 个\n");
+            }
+            message.append("\n已经切到「").append(target.title).append("」并加入队列。");
+            this.router.route(target, targets, message.toString());
         }
+        // 剩下的确实用不了：说清楚它是什么，别只甩一句“格式不支持”
+        if (accepted.isEmpty() && elsewhere.isEmpty() && !rejectedLabels.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    String.join("\n", rejectedLabels) + "\n\n" + this.mode.supportedHint(),
+                    "这些文件“" + this.mode.shortName() + "”用不了", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    /** 后台认一遍刚加进来的文件，把“等待转换”换成「视频 · 1920×1080 · 03:21 · H.264 + AAC」。 */
+    private void describeInputs(List<TransferItem> added) {
+        if (added.isEmpty() || this.engine.ffmpegPath() == null) {
+            return;
+        }
+        Thread thread = new Thread(() -> {
+            for (TransferItem item : added) {
+                if (item.state != TransferItem.State.WAITING) {
+                    continue;
+                }
+                MediaProbe.Info info = MediaProbe.inspect(this.engine.ffmpegPath(), item.source);
+                String text = info.summary();
+                if (this.mode == Mode.AUDIO && info.kind() == MediaProbe.Kind.VIDEO) {
+                    text += " · 会抽音轨";
+                }
+                if (item.state != TransferItem.State.WAITING) {
+                    continue;
+                }
+                item.detail = text;
+                int index = this.items.indexOf(item);
+                if (index >= 0) {
+                    SwingUtilities.invokeLater(() -> this.tableModel.fireTableRowsUpdated(index, index));
+                }
+            }
+        }, "probe-inputs");
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private boolean supported(Path path) {
