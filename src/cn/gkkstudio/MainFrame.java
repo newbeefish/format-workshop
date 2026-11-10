@@ -318,30 +318,34 @@ final class MainFrame extends JFrame {
     // ------------------------------------------------------------------ 显卡 / CPU 开关
 
     /**
-     * 顶部的「编码：CPU / 显卡」开关，独立于各板块的格式设置。
-     * 显卡能不能用要真跑一次编码才知道，所以先禁着，探测完再放开。
+     * 顶部的「编码：CPU / 显卡」开关：常驻显示，不随板块隐藏；
+     * 显卡用不了时按钮置灰、点不动，鼠标停上去说明原因。
      */
     private javax.swing.JComponent buildAccelSwitch() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        panel.setOpaque(false);
+        UiKit.RoundedPanel card = new UiKit.RoundedPanel(Color.WHITE, 18);
+        card.setLayout(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        card.setBorder(new EmptyBorder(3, 12, 3, 12));
+
         JLabel caption = new JLabel("编码");
         caption.setForeground(UiKit.MUTED);
-        caption.setFont(caption.getFont().deriveFont(12.0f));
-        caption.setBorder(new EmptyBorder(0, 0, 0, 8));
-        panel.add(caption);
+        caption.setFont(caption.getFont().deriveFont(java.awt.Font.BOLD, 12.0f));
+        card.add(caption);
 
-        this.cpuToggle.setFont(this.cpuToggle.getFont().deriveFont(java.awt.Font.PLAIN, 12.0f));
-        this.cpuToggle.setFocusPainted(false);
-        this.cpuToggle.setMargin(new java.awt.Insets(2, 10, 2, 10));
-        this.gpuToggle.setFont(this.gpuToggle.getFont().deriveFont(java.awt.Font.PLAIN, 12.0f));
-        this.gpuToggle.setFocusPainted(false);
-        this.gpuToggle.setMargin(new java.awt.Insets(2, 10, 2, 10));
+        for (javax.swing.JToggleButton button : new javax.swing.JToggleButton[]{this.cpuToggle, this.gpuToggle}) {
+            button.setFont(button.getFont().deriveFont(java.awt.Font.PLAIN, 12.0f));
+            button.setFocusPainted(false);
+            button.setOpaque(true);
+            button.setContentAreaFilled(true);
+            button.setMargin(new java.awt.Insets(3, 12, 3, 12));
+            button.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+            button.putClientProperty("JButton.buttonType", "roundRect");
+        }
 
         javax.swing.ButtonGroup group = new javax.swing.ButtonGroup();
         group.add(this.cpuToggle);
         group.add(this.gpuToggle);
         this.cpuToggle.setSelected(true);
-        this.cpuToggle.setToolTipText("用 CPU 编码（最稳，任何机器都能用）");
+        this.cpuToggle.setToolTipText("用 CPU 编码（最稳，任何机器都能用；默认）");
         this.gpuToggle.setEnabled(false);
         this.gpuToggle.setToolTipText("正在检测显卡编码器…");
 
@@ -355,8 +359,9 @@ final class MainFrame extends JFrame {
                 this.applyAcceleration(true);
             }
         });
-        panel.add(this.cpuToggle);
-        panel.add(this.gpuToggle);
+        card.add(this.cpuToggle);
+        card.add(this.gpuToggle);
+        this.refreshAccelLook();
 
         new Thread(() -> {
             GpuSupport.Gpu gpu = GpuSupport.detect(this.tools.ffmpeg());
@@ -368,15 +373,44 @@ final class MainFrame extends JFrame {
                             + String.join(" / ", gpu.encoders().keySet()).toUpperCase(java.util.Locale.ROOT)
                             + "；失败会自动退回 CPU");
                 } else {
-                    this.gpuToggle.setToolTipText("这台机器用不了显卡编码：" + gpu.reason());
+                    this.gpuToggle.setText("显卡");
+                    this.gpuToggle.setToolTipText("显卡编码不可用：" + gpu.reason());
                     if (this.gpuToggle.isSelected()) {
                         this.cpuToggle.setSelected(true);
                         this.applyAcceleration(false);
                     }
                 }
+                this.refreshAccelLook();
+                card.revalidate();
+                card.repaint();
             });
         }, "gpu-detect").start();
-        return panel;
+        return card;
+    }
+
+    /** 选中的那段填色，没选的白底；显卡不可用时置灰（看着就知道点不了）。 */
+    private void refreshAccelLook() {
+        boolean gpuAvailable = this.gpuToggle.isEnabled();
+        for (javax.swing.JToggleButton button : new javax.swing.JToggleButton[]{this.cpuToggle, this.gpuToggle}) {
+            boolean selected = button.isSelected();
+            boolean usable = button == this.cpuToggle || gpuAvailable;
+            if (!usable) {
+                button.setBackground(new Color(0xF2F2F4));
+                button.setForeground(new Color(0xB4B4BC));
+                button.setBorder(BorderFactory.createLineBorder(new Color(0xE4E4E9)));
+            } else if (selected) {
+                button.setBackground(UiKit.PRIMARY);
+                button.setForeground(Color.WHITE);
+                button.setBorder(BorderFactory.createLineBorder(UiKit.PRIMARY));
+            } else {
+                button.setBackground(Color.WHITE);
+                button.setForeground(UiKit.TEXT);
+                button.setBorder(BorderFactory.createLineBorder(new Color(0xD5D5DD)));
+            }
+            button.setOpaque(true);
+        }
+        this.cpuToggle.repaint();
+        this.gpuToggle.repaint();
     }
 
     private void applyAcceleration(boolean gpu) {
@@ -391,7 +425,8 @@ final class MainFrame extends JFrame {
         this.engineLabel.setToolTipText(text);
         this.gpuToggle.setToolTipText(gpu && detected != null && detected.usable()
                 ? "正在用显卡编码（" + detected.label() + "）：只对 H.264 / H.265 / AV1 生效，失败会自动退回 CPU"
-                : "这台机器用不了显卡编码：" + (detected == null ? "还没探测" : detected.reason()));
+                : "显卡编码不可用：" + (detected == null ? "还没探测" : detected.reason()));
+        this.refreshAccelLook();
     }
 
     // ------------------------------------------------------------------ 切换与弹窗
