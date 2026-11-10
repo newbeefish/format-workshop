@@ -58,6 +58,9 @@ Windows 会为每个文件单独拉起一次程序；想要批量转换，建议
 【视频转换】
   输入：mp4 / mkv / avi / mov / webm / flv / wmv / ts / m4v / mpg / mpeg / 3gp / ogv / m2ts / vob / rmvb / mxf 等
   输出：MP4·H.264 / MKV·H.264 / MOV·H.264 / WEBM·VP9 / AVI·MPEG-4 / GIF
+  显卡：窗口上方有「编码 CPU / 显卡」开关。显卡够好（NVIDIA / Intel 核显 / AMD）时打开它，
+        H.264 / H.265 / AV1 会用显卡编码，速度快很多、CPU 占用低；不支持的编码自动走 CPU，
+        万一显卡编码失败也会自动退回 CPU 重试。能不能用是真跑一遍试出来的，不能用会在开关提示里说明原因。
   分辨率：原分辨率 / 1080p / 720p / 480p
   质量：高质量（CRF 18）/ 标准（CRF 23）/ 小体积（CRF 28）
   说明：MP4 兼容性最好，WEBM 同画质体积更小；GIF 导出 12 帧动图、无声音。

@@ -46,6 +46,10 @@ final class MainFrame extends JFrame {
 
     private final Map<Mode, ConversionView> views = new EnumMap<>(Mode.class);
     private MiscView miscView;
+    /** 顶上的「显卡 / CPU」开关。 */
+    private final javax.swing.JToggleButton cpuToggle = new javax.swing.JToggleButton("CPU");
+    private final javax.swing.JToggleButton gpuToggle = new javax.swing.JToggleButton("显卡");
+    private boolean useGpu;
     private final Map<Mode, NavItem> navItems = new EnumMap<>(Mode.class);
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel cards = new JPanel(this.cardLayout);
@@ -185,7 +189,7 @@ final class MainFrame extends JFrame {
         logo.setAlignmentX(Component.LEFT_ALIGNMENT);
         panel.add(logo);
 
-        JLabel subtitle = new JLabel("Universal Converter 2.2.1");
+        JLabel subtitle = new JLabel("Universal Converter 2.3.5");
         subtitle.setForeground(UiKit.MUTED);
         subtitle.setFont(subtitle.getFont().deriveFont(11.0f));
         subtitle.setBorder(new EmptyBorder(10, 0, 6, 0));
@@ -297,6 +301,7 @@ final class MainFrame extends JFrame {
 
         JPanel status = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 8));
         status.setOpaque(false);
+        status.add(this.buildAccelSwitch(), 0);
         this.engineDotHost.setIcon(new UiKit.StatusDot(this.tools.ready()));
         this.engineLabel.setForeground(new Color(1471569));
         this.engineLabel.setFont(this.engineLabel.getFont().deriveFont(Font.BOLD, 12.0f));
@@ -308,6 +313,85 @@ final class MainFrame extends JFrame {
         status.add(details);
         header.add(status, BorderLayout.EAST);
         return header;
+    }
+
+    // ------------------------------------------------------------------ 显卡 / CPU 开关
+
+    /**
+     * 顶部的「编码：CPU / 显卡」开关，独立于各板块的格式设置。
+     * 显卡能不能用要真跑一次编码才知道，所以先禁着，探测完再放开。
+     */
+    private javax.swing.JComponent buildAccelSwitch() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        panel.setOpaque(false);
+        JLabel caption = new JLabel("编码");
+        caption.setForeground(UiKit.MUTED);
+        caption.setFont(caption.getFont().deriveFont(12.0f));
+        caption.setBorder(new EmptyBorder(0, 0, 0, 8));
+        panel.add(caption);
+
+        this.cpuToggle.setFont(this.cpuToggle.getFont().deriveFont(java.awt.Font.PLAIN, 12.0f));
+        this.cpuToggle.setFocusPainted(false);
+        this.cpuToggle.setMargin(new java.awt.Insets(2, 10, 2, 10));
+        this.gpuToggle.setFont(this.gpuToggle.getFont().deriveFont(java.awt.Font.PLAIN, 12.0f));
+        this.gpuToggle.setFocusPainted(false);
+        this.gpuToggle.setMargin(new java.awt.Insets(2, 10, 2, 10));
+
+        javax.swing.ButtonGroup group = new javax.swing.ButtonGroup();
+        group.add(this.cpuToggle);
+        group.add(this.gpuToggle);
+        this.cpuToggle.setSelected(true);
+        this.cpuToggle.setToolTipText("用 CPU 编码（最稳，任何机器都能用）");
+        this.gpuToggle.setEnabled(false);
+        this.gpuToggle.setToolTipText("正在检测显卡编码器…");
+
+        this.cpuToggle.addActionListener(event -> {
+            if (this.cpuToggle.isSelected()) {
+                this.applyAcceleration(false);
+            }
+        });
+        this.gpuToggle.addActionListener(event -> {
+            if (this.gpuToggle.isSelected()) {
+                this.applyAcceleration(true);
+            }
+        });
+        panel.add(this.cpuToggle);
+        panel.add(this.gpuToggle);
+
+        new Thread(() -> {
+            GpuSupport.Gpu gpu = GpuSupport.detect(this.tools.ffmpeg());
+            SwingUtilities.invokeLater(() -> {
+                this.gpuToggle.setEnabled(gpu.usable());
+                if (gpu.usable()) {
+                    this.gpuToggle.setText("显卡 · " + gpu.shortLabel());
+                    this.gpuToggle.setToolTipText("用显卡编码（" + gpu.label() + "），支持 "
+                            + String.join(" / ", gpu.encoders().keySet()).toUpperCase(java.util.Locale.ROOT)
+                            + "；失败会自动退回 CPU");
+                } else {
+                    this.gpuToggle.setToolTipText("这台机器用不了显卡编码：" + gpu.reason());
+                    if (this.gpuToggle.isSelected()) {
+                        this.cpuToggle.setSelected(true);
+                        this.applyAcceleration(false);
+                    }
+                }
+            });
+        }, "gpu-detect").start();
+        return panel;
+    }
+
+    private void applyAcceleration(boolean gpu) {
+        this.useGpu = gpu;
+        for (ConversionView view : this.views.values()) {
+            view.setUseGpu(gpu);
+        }
+        GpuSupport.Gpu detected = GpuSupport.current();
+        String text = gpu && detected != null && detected.usable()
+                ? "已切换到显卡编码（" + detected.label() + "）：只对 H.264 / H.265 / AV1 生效，其他编码仍走 CPU"
+                : "已切换到 CPU 编码";
+        this.engineLabel.setToolTipText(text);
+        this.gpuToggle.setToolTipText(gpu && detected != null && detected.usable()
+                ? "正在用显卡编码（" + detected.label() + "）：只对 H.264 / H.265 / AV1 生效，失败会自动退回 CPU"
+                : "这台机器用不了显卡编码：" + (detected == null ? "还没探测" : detected.reason()));
     }
 
     // ------------------------------------------------------------------ 切换与弹窗

@@ -114,6 +114,9 @@ final class ConversionView extends JPanel {
 
     private final BoardRouter router;
 
+    /** 顶上那个「显卡 / CPU」开关的状态；默认 CPU。 */
+    private boolean useGpu;
+
     private boolean running;
 
     ConversionView(Mode mode, SystemCapabilities.Toolchain tools, Path rootDirectory) {
@@ -150,6 +153,12 @@ final class ConversionView extends JPanel {
 
     Mode mode() {
         return this.mode;
+    }
+
+    /** 主窗口切换「显卡 / CPU」时通知各板块。 */
+    void setUseGpu(boolean useGpu) {
+        this.useGpu = useGpu;
+        this.updateOptionControls();
     }
 
     MediaEngine engine() {
@@ -637,6 +646,8 @@ final class ConversionView extends JPanel {
         boolean image = this.mode == Mode.IMAGE;
         String codecPreference = "";
         List<String> videoCopyAudioArgs = List.of();
+        boolean hardwareEncode = false;
+        List<String> fallbackArgs = List.of();
         Targets.Target target = (Targets.Target) this.formatBox.getSelectedItem();
         if (target == null) {
             return null;
@@ -660,9 +671,21 @@ final class ConversionView extends JPanel {
                 }
                 extension = target.dotted();
                 // 选「原样复制」时，这里的 args 只是容器装不下时的兜底重编码参数
-                args = VideoCatalog.args(container, codec, quality);
+                List<String> cpuArgs = VideoCatalog.args(container, codec, quality);
+                args = cpuArgs;
                 codecPreference = codec.id();
                 videoCopyAudioArgs = VideoCatalog.audioArgsList(container);
+                // 顶上开了显卡、而且显卡支持这个编码，就换硬件编码器，失败再退回 CPU
+                String codecName = FastPath.videoName(codec.id());
+                GpuSupport.Gpu gpu = GpuSupport.current();
+                if (this.useGpu && !"copy".equals(codec.id()) && GpuSupport.supports(gpu, codecName)) {
+                    List<String> gpuArgs = GpuSupport.videoArgs(gpu, codecName, container.extension(), quality);
+                    if (!gpuArgs.isEmpty()) {
+                        args = gpuArgs;
+                        hardwareEncode = true;
+                        fallbackArgs = cpuArgs;
+                    }
+                }
                 List<String> filters = new ArrayList<>();
                 if ("gif".equals(container.extension())) {
                     filters.add("fps=12");
@@ -689,7 +712,8 @@ final class ConversionView extends JPanel {
         }
         return new MediaEngine.Settings(output, this.sourceDirectory.isSelected(),
                 (Integer) this.concurrencySpinner.getValue(), this.mode, extension, args, filter,
-                image, this.mode == Mode.AUDIO, codecPreference, videoCopyAudioArgs);
+                image, this.mode == Mode.AUDIO, codecPreference, videoCopyAudioArgs,
+                hardwareEncode, fallbackArgs);
     }
 
     private Path resolveOutputDirectory() {

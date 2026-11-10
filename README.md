@@ -1,6 +1,6 @@
 # 格式作坊 · Format Workshop
 
-> 当前版本 2.3.4（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
+> 当前版本 2.3.5（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
 
 一个纯本地运行的 Windows 图形化格式转换工具，界面用 Java Swing + FlatLaf 手写（紫色主题、玻璃拟态），
 内核全部走 **FFmpeg**，另外内置酷狗 / 网易云 / QQ 音乐加密格式的解密能力。
@@ -23,6 +23,9 @@
   - 容器 16 种：MP4 / MKV / MOV / WEBM / AVI / FLV / WMV / TS / M2TS / MPG / 3GP / OGV / MXF / NUT / DV / GIF
   - 编码 11 种：H.264 / H.265(HEVC) / VP9 / AV1 / MPEG-4 / MPEG-2 / ProRes / WMV2 / Theora / DV / GIF
   - 容器换掉以后只显示它支持的编码，界面上每一项都标了优缺点（例如 “H.264 · 兼容最广 · 硬解普遍”）
+- **可以用显卡编码**：窗口上方有个独立的「编码：CPU / 显卡」开关（默认 CPU）。开了之后 H.264 / H.265 / AV1 走
+  NVENC / Quick Sync / AMF / D3D12 硬件编码器，解码也走 `-hwaccel auto`；显卡不支持的编码（MPEG-4、ProRes、GIF…）仍走 CPU，
+  编码失败会自动退回 CPU 再试一次。开关只对视频板块的编码生效，封装（-c copy）本来就不需要编码
 - **能只换壳就不重编码**：编码下拉框默认「原样复制 · 不重编码（最快）」。TS / M4S / MKV / MP4 互换、HEVC 保持 HEVC 这类场景直接 `-c copy`，几秒完成、画质零损失；
   只有容器装不下源编码（例如 VP9 进 MP4）或改过分辨率时才退回重编码
 - 音轨也跟着容器走：MKV(H.264+FLAC)→MP4 会「视频直封装 + FLAC 重编码成 AAC」，只有一条音轨需要转
@@ -83,6 +86,7 @@
   判断它是图片 / 视频 / 音频 / 压缩包；拖错板块会自动切到该去的板块并告诉你认出了什么
 - 队列里每一行的“状态”会写清楚它是什么，例如「视频 · 1920×1080 · 03:21 · H.264 + AAC」、
   「音频 · 04:13 · FLAC」；把视频拖进音频板块会标「会抽音轨」
+- 显卡是否可用是**真跑一次 0.4 秒试编码**测出来的：能用才亮起按钮，不能用会在提示里写清原因（例如 NVENC 驱动版本不够）
 - 输出目录、日志目录、引擎自检都能在界面里看
 
 ## 运行环境

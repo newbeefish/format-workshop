@@ -50,7 +50,11 @@ final class MediaEngine implements AutoCloseable {
             /** 用户选的编码 id；"copy" 表示「原样复制，不重编码」。 */
             String codecPreference,
             /** 视频原样封装、音轨必须重编码时用的音频参数。 */
-            List<String> videoCopyAudioArgs) {
+            List<String> videoCopyAudioArgs,
+            /** 是否用显卡编码（会额外开硬件解码）；失败时用下面的 CPU 参数重试。 */
+            boolean hardwareEncode,
+            /** CPU 编码参数（显卡编码失败时的兜底）。 */
+            List<String> fallbackArgs) {
     }
 
     interface Listener {
@@ -249,62 +253,22 @@ final class MediaEngine implements AutoCloseable {
             partFile = target.resolveSibling(baseName + ".part" + settings.targetExtension());
             Files.deleteIfExists(partFile);
 
-            List<String> command = new ArrayList<>();
-            command.add(this.tools.ffmpeg().toString());
-            if (decision.copying()) {
-                // TS / 分片流的时间戳常常是乱的，封装前先让 ffmpeg 重新生成
-                command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin",
-                        "-fflags", "+genpts", "-i", effectiveInput(resolved.path()).toString()));
-            } else {
-                command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin",
-                        "-i", effectiveInput(resolved.path()).toString()));
-            }
-            if (settings.imageJob()) {
-                command.addAll(List.of("-frames:v", "1"));
-            } else if (settings.mode() == Mode.VIDEO) {
-                command.addAll(List.of("-map", "0:v:0", "-map", "0:a?"));
-            } else {
-                command.addAll(List.of("-map", "0:a:0", "-map_metadata", "0"));
-            }
-            if (settings.videoFilter() != null && !settings.videoFilter().isBlank()) {
-                command.addAll(List.of("-vf", settings.videoFilter()));
-            }
-            command.addAll(codecArgs);
-            if (settings.mode() == Mode.AUDIO && !decision.copying() && container.equalsIgnoreCase("mp3")) {
-                command.addAll(List.of("-id3v2_version", "3", "-write_id3v1", "1"));
-            }
-            command.addAll(List.of("-progress", "pipe:1", "-nostats", partFile.toString()));
-            addLine("[信息] 正在" + (decision.copying() ? "封装" : "转换") + "：" + item.fileName()
-                    + " -> " + settings.targetExtension());
-
-            Process process = new ProcessBuilder(command).start();
-            item.process = process;
-            StringBuilder errors = new StringBuilder();
-            Thread errorThread = new Thread(() -> readStream(process.getErrorStream(), errors), "ffmpeg-errors");
-            errorThread.setDaemon(true);
-            errorThread.start();
-
             double duration = settings.imageJob() ? -1.0 : probe.duration();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                int lastProgress = -1;
-                while ((line = reader.readLine()) != null) {
-                    if (!line.startsWith("out_time_us=") || duration <= 0.0) {
-                        continue;
-                    }
-                    long micros = parseLong(line.substring("out_time_us=".length()).trim());
-                    int percent = (int) Math.max(18, Math.min(99, 18 + (micros / (duration * 1_000_000.0)) * 81.0));
-                    if (percent > lastProgress) {
-                        lastProgress = percent;
-                        item.progress = percent;
-                        item.detail = percent + "%";
-                        notifyChanged(item, listener);
-                    }
-                }
+            StringBuilder errors = new StringBuilder();
+            boolean hardware = settings.hardwareEncode() && !decision.copying();
+            int exitCode = runFfmpeg(item, settings, codecArgs, hardware, effectiveInput(resolved.path()),
+                    partFile, duration, decision.copying(), container, listener, errors);
+            // 显卡编码偶尔会在个别分辨率/像素格式上翻车：自动退回 CPU 再来一次
+            if (exitCode != 0 && hardware
+                    && settings.fallbackArgs() != null && !settings.fallbackArgs().isEmpty()) {
+                addLine("[警告] 显卡编码没成功，改用 CPU 重试：" + item.fileName());
+                Files.deleteIfExists(partFile);
+                item.detail = "改用 CPU 重试…";
+                notifyChanged(item, listener);
+                errors = new StringBuilder();
+                exitCode = runFfmpeg(item, settings, settings.fallbackArgs(), false,
+                        effectiveInput(resolved.path()), partFile, duration, false, container, listener, errors);
             }
-            int exitCode = process.waitFor();
-            errorThread.join(1500L);
-            item.process = null;
 
             if (this.cancelling) {
                 throw new CancellationException();
@@ -336,6 +300,74 @@ final class MediaEngine implements AutoCloseable {
             deleteQuietly(temporary);
             notifyChanged(item, listener);
         }
+    }
+
+    /**
+     * 跑一次 ffmpeg，顺手更新进度。
+     *
+     * @param hardware 显卡编码时加 -hwaccel auto，让解码也走显卡
+     * @return ffmpeg 的退出码
+     */
+    private int runFfmpeg(TransferItem item, Settings settings, List<String> codecArgs, boolean hardware,
+                          Path input, Path partFile, double duration, boolean copying, String container,
+                          Listener listener, StringBuilder errors) throws Exception {
+        List<String> command = new ArrayList<>();
+        command.add(this.tools.ffmpeg().toString());
+        if (copying) {
+            // TS / 分片流的时间戳常常是乱的，封装前先让 ffmpeg 重新生成
+            command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+                    "-fflags", "+genpts", "-i", input.toString()));
+        } else if (hardware) {
+            command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+                    "-hwaccel", "auto", "-i", input.toString()));
+        } else {
+            command.addAll(List.of("-y", "-hide_banner", "-loglevel", "error", "-nostdin",
+                    "-i", input.toString()));
+        }
+        if (settings.imageJob()) {
+            command.addAll(List.of("-frames:v", "1"));
+        } else if (settings.mode() == Mode.VIDEO) {
+            command.addAll(List.of("-map", "0:v:0", "-map", "0:a?"));
+        } else {
+            command.addAll(List.of("-map", "0:a:0", "-map_metadata", "0"));
+        }
+        if (settings.videoFilter() != null && !settings.videoFilter().isBlank()) {
+            command.addAll(List.of("-vf", settings.videoFilter()));
+        }
+        command.addAll(codecArgs);
+        if (settings.mode() == Mode.AUDIO && !copying && container != null && container.equalsIgnoreCase("mp3")) {
+            command.addAll(List.of("-id3v2_version", "3", "-write_id3v1", "1"));
+        }
+        command.addAll(List.of("-progress", "pipe:1", "-nostats", partFile.toString()));
+        addLine("[信息] 正在" + (copying ? "封装" : "转换") + "：" + item.fileName()
+                + " -> " + settings.targetExtension() + (hardware ? "（显卡）" : ""));
+
+        Process process = new ProcessBuilder(command).start();
+        item.process = process;
+        Thread errorThread = new Thread(() -> readStream(process.getErrorStream(), errors), "ffmpeg-errors");
+        errorThread.setDaemon(true);
+        errorThread.start();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            int lastProgress = -1;
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith("out_time_us=") || duration <= 0.0) {
+                    continue;
+                }
+                long micros = parseLong(line.substring("out_time_us=".length()).trim());
+                int percent = (int) Math.max(18, Math.min(99, 18 + (micros / (duration * 1_000_000.0)) * 81.0));
+                if (percent > lastProgress) {
+                    lastProgress = percent;
+                    item.progress = percent;
+                    item.detail = percent + "%";
+                    notifyChanged(item, listener);
+                }
+            }
+        }
+        int exitCode = process.waitFor();
+        errorThread.join(1500L);
+        item.process = null;
+        return exitCode;
     }
 
     /** 组装「原样封装」的参数：视频/音频都 copy，或者只 copy 视频、音频重编码。 */
