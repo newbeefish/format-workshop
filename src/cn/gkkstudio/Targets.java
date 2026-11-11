@@ -46,7 +46,9 @@ final class Targets {
 
     private static final Set<String> IMAGE_BLACKLIST = Set.of(
             "ico", "cur", "icb", "vda", "vst", "dib", "rgba", "rgb", "bw", "ras",
-            "pic", "cin", "j2c", "apng", "jfif", "jpe", "gif");
+            "pic", "cin", "j2c", "apng", "jfif", "jpe", "gif",
+            // HEIC / HEIF / HIF 只能靠 heif-dec 读进来，FFmpeg 没有写它们的 muxer
+            "heic", "heif", "hif");
 
     private static final Set<String> VIDEO_BLACKLIST = Set.of(
             "m1v", "m2v", "m2p", "m2t", "m4s", "ismv", "dav", "roq", "nsv", "amv",
