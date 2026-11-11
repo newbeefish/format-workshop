@@ -37,11 +37,11 @@ enum MiscAction {
     TOUCH("改修改时间", "把文件修改时间改成当前时间",
             "就地修改，输出仍指向原文件", Set.of(""), false),    ARCHIVE_CONVERT("压缩格式互转", "在 ZIP / 7Z / TAR.GZ / TAR.XZ / JAR 之间互转",
             "右侧选目标格式；输入可以是 zip / jar / 7z / tar / tar.gz / tgz / xz", Set.of("zip", "jar", "7z", "tar", "tgz", "gz", "xz"), false),    ZIP_PACK("打包为 ZIP", "把选中的文件/文件夹压成一个 .zip",
-            "输出 .zip；文件夹会连同子目录一起打包", Set.of("zip"), false),
+            "输出 .zip；文件夹会连同子目录一起打包", Set.of(""), false),
     ZIP_UNPACK("解压 ZIP", "把 .zip 解到同名文件夹",
             "输出一个文件夹；自动跳过不安全的路径", Set.of("zip"), true),
     TAR_PACK("打包为 TAR.GZ", "压缩成 .tar.gz（Linux 友好）",
-            "输出 .tar.gz；保留目录结构", Set.of("tar", "tgz", "gz"), false),
+            "输出 .tar.gz；保留目录结构", Set.of(""), false),
     TAR_UNPACK("解压 TAR / GZ", "解开 .tar / .tar.gz / .tgz / .gz",
             "输出一个文件夹", Set.of("tar", "tgz", "gz"), true),
     IMG_TO_PDF("图片合成 PDF", "每张图片单独生成一个 PDF",
@@ -90,7 +90,16 @@ enum MiscAction {
         if (this == TAR_UNPACK) {
             return name.endsWith(".tar") || name.endsWith(".tar.gz") || name.endsWith(".tgz") || name.endsWith(".gz");
         }
-        return this.extensions.contains(extension);
+        // 空的扩展名代表「任何文件都收」（打包、哈希、改名、改时间…）
+        return this.extensions.contains("") || this.extensions.contains(extension);
+    }
+
+    /** 只管“把文件收进来打包”的动作；自动换操作时只在它们之间让路。 */
+    boolean isPackAction() {
+        return switch (this) {
+            case ZIP_PACK, TAR_PACK, SEVENZ_PACK, XZ_PACK, JAR_PACK, ZPAQ_PACK -> true;
+            default -> false;
+        };
     }
 
     static List<MiscAction> all() {

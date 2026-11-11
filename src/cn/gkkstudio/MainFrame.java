@@ -88,7 +88,7 @@ final class MainFrame extends JFrame {
             this.cards.add(view, mode.name());
         }
 
-        this.miscView = new MiscView(this.rootDirectory);
+        this.miscView = new MiscView(this.rootDirectory, this::routeFiles);
         this.cards.add(this.miscView, "MISC");
         this.setContentPane(this.buildRoot());
         this.switchTo(initialMode(initialFiles, forcedMode));

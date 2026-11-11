@@ -46,6 +46,11 @@ final class MiscView extends JPanel {
     private boolean running;
 
     private final JComboBox<MiscAction> actionBox = new JComboBox<>(MiscAction.values());
+    /** 四个分类按钮，自动换操作时要跟着选中。 */
+    private final java.util.Map<String, javax.swing.JToggleButton> categoryButtons =
+            new java.util.LinkedHashMap<>();
+    /** 认出来是视频/音频时，交给主窗口切板块。 */
+    private final ConversionView.BoardRouter router;
     private final JComboBox<String> imageFormatBox = new JComboBox<>(new String[]{"png", "jpg"});
     private final JLabel imageFormatLabel = UiKit.inspectorLabel("输出图片格式（PDF 拆图）");
     private final JTextField paramField = new JTextField();
@@ -81,7 +86,12 @@ final class MiscView extends JPanel {
     private final DefaultTableModel tableModel;
 
     MiscView(Path rootDirectory) {
+        this(rootDirectory, null);
+    }
+
+    MiscView(Path rootDirectory, ConversionView.BoardRouter router) {
         this.rootDirectory = rootDirectory;
+        this.router = router;
         this.engine = new MiscEngine(rootDirectory.resolve("logs"));
         this.outputField.setText(rootDirectory.resolve("output").toString());
 
@@ -209,6 +219,7 @@ final class MiscView extends JPanel {
             });
             group.add(button);
             categories.add(button);
+            this.categoryButtons.put(category, button);
         }
         body.add(categories);
         body.add(Box.createVerticalStrut(11));
@@ -549,29 +560,107 @@ final class MiscView extends JPanel {
             return;
         }
         MiscAction action = (MiscAction) this.actionBox.getSelectedItem();
+        List<Path> accepted = new ArrayList<>();
         List<String> rejected = new ArrayList<>();
+        java.util.Map<MiscAction, List<Path>> switchTo = new java.util.LinkedHashMap<>();
+        java.util.List<String> switchNotes = new ArrayList<>();
+        java.util.Map<Mode, List<Path>> media = new java.util.LinkedHashMap<>();
+        java.util.List<String> mediaNotes = new ArrayList<>();
+
         for (Path path : paths) {
             if (!Files.exists(path)) {
                 continue;
             }
-            if (action.supports(path) || Files.isDirectory(path)) {
-                boolean known = this.items.stream().anyMatch(item -> item.source.equals(path));
-                if (!known) {
-                    this.items.add(new TransferItem(path));
-                }
+            if (Files.isDirectory(path)) {
+                accepted.add(path);
+                continue;
+            }
+            MiscDetect.Suggestion suggestion = MiscDetect.suggest(path);
+            boolean fits = action.supports(path);
+            // 当前是“打包”动作、但文件明显是归档/文档 → 自动换成对应的解包/转换操作
+            boolean switchable = action.isPackAction()
+                    || (!fits && suggestion.hasAction());
+            if (suggestion.hasAction() && suggestion.action() != action && switchable) {
+                switchTo.computeIfAbsent(suggestion.action(), key -> new ArrayList<>()).add(path);
+                switchNotes.add(MiscDetect.describe(path, suggestion));
+                continue;
+            }
+            if (suggestion.hasBoard() && !fits) {
+                media.computeIfAbsent(suggestion.mediaBoard(), key -> new ArrayList<>()).add(path);
+                mediaNotes.add(MiscDetect.describe(path, suggestion));
+                continue;
+            }
+            if (fits) {
+                accepted.add(path);
             } else {
-                String name = path.getFileName().toString();
-                if (!rejected.contains(name)) {
-                    rejected.add(name);
+                rejected.add(MiscDetect.describe(path, suggestion));
+            }
+        }
+
+        // 先处理“该换操作”的那批：换成推荐操作，再把它们收进来
+        String switched = null;
+        if (!switchTo.isEmpty()) {
+            MiscAction target = switchTo.keySet().iterator().next();
+            this.focusAction(target);
+            action = target;
+            switched = target.label;
+            for (Path path : switchTo.get(target)) {
+                if (target.supports(path)) {
+                    accepted.add(path);
+                } else {
+                    rejected.add(path.getFileName().toString());
+                }
+            }
+            for (java.util.Map.Entry<MiscAction, List<Path>> entry : switchTo.entrySet()) {
+                if (entry.getKey() != target) {
+                    for (Path path : entry.getValue()) {
+                        rejected.add(path.getFileName().toString() + "（要用「" + entry.getKey().label + "」）");
+                    }
                 }
             }
         }
-        this.refresh();
-        if (this.items.isEmpty() && !rejected.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "“" + action.label + "”不支持这些文件：\n" + String.join("、", rejected),
-                    "格式不支持", JOptionPane.WARNING_MESSAGE);
+
+        for (Path path : accepted) {
+            boolean known = this.items.stream().anyMatch(item -> item.source.equals(path));
+            if (!known) {
+                this.items.add(new TransferItem(path));
+            }
         }
+        this.refresh();
+
+        if (switched != null) {
+            JOptionPane.showMessageDialog(this,
+                    "这些文件不是用「打包」处理的，已自动换成「" + switched + "」：\n\n  · "
+                            + String.join("\n  · ", switchNotes.subList(0, Math.min(5, switchNotes.size())))
+                            + (switchNotes.size() > 5 ? "\n  … 等 " + switchNotes.size() + " 个" : ""),
+                    "帮你认了一下文件", JOptionPane.INFORMATION_MESSAGE);
+        }
+        if (!media.isEmpty() && this.router != null) {
+            Mode target = media.keySet().iterator().next();
+            List<Path> targets = new ArrayList<>();
+            for (List<Path> group : media.values()) {
+                targets.addAll(group);
+            }
+            this.router.route(target, targets, "这些文件不是杂项能处理的，已切到「" + target.title + "」：\n\n  · "
+                    + String.join("\n  · ", mediaNotes.subList(0, Math.min(5, mediaNotes.size()))));
+        }
+        if (accepted.isEmpty() && switchTo.isEmpty() && media.isEmpty() && !rejected.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    String.join("\n", rejected),
+                    "这些文件“" + (action == null ? "杂项" : action.label) + "”用不了",
+                    JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    /** 把分类和操作都切到指定动作上（分类按钮也跟着选中）。 */
+    private void focusAction(MiscAction action) {
+        javax.swing.JToggleButton button = this.categoryButtons.get(action.category());
+        if (button != null && !button.isSelected()) {
+            button.setSelected(true);
+        }
+        this.filterCategory(action.category());
+        this.actionBox.setSelectedItem(action);
+        this.updateHint();
     }
 
     // ------------------------------------------------------------------ 执行
