@@ -517,7 +517,10 @@ final class MediaEngine implements AutoCloseable {
         command.add(copied.toString());
         ProcessResult result = runTool(command, kggDir);
         for (String line : result.lines()) {
-            addLine(line);
+            // kgg-dec 每个文件都会先打 4 行版权 + 用法，日志里只留真正有信息量的行
+            if (!isKggBanner(line)) {
+                addLine(line);
+            }
         }
         Path produced = newestAudio(kggDir, baseName(source.getFileName().toString()));
         if (produced == null) {
@@ -525,6 +528,16 @@ final class MediaEngine implements AutoCloseable {
             throw new IOException(hint + "；若提示 ekey not found，请在本机酷狗重新下载该歌曲后再试");
         }
         return produced;
+    }
+
+    /** kgg-dec 的固定开场白（版权 / 用法），对用户没有信息量。 */
+    private static boolean isKggBanner(String line) {
+        String text = line == null ? "" : line.trim();
+        return text.isEmpty()
+                || text.startsWith("kgg-dec v")
+                || text.startsWith("This software is free")
+                || text.startsWith("For more details")
+                || text.startsWith("Usage: kgg-dec");
     }
 
     private Path runUnlockTool(Path source) throws IOException {

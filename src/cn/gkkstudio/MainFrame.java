@@ -189,7 +189,7 @@ final class MainFrame extends JFrame {
         logo.setAlignmentX(Component.LEFT_ALIGNMENT);
         panel.add(logo);
 
-        JLabel subtitle = new JLabel("Universal Converter 2.3.5");
+        JLabel subtitle = new JLabel("Universal Converter 2.3.8");
         subtitle.setForeground(UiKit.MUTED);
         subtitle.setFont(subtitle.getFont().deriveFont(11.0f));
         subtitle.setBorder(new EmptyBorder(10, 0, 6, 0));

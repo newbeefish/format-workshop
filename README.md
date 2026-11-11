@@ -1,6 +1,6 @@
 # 格式作坊 · Format Workshop
 
-> 当前版本 2.3.7（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
+> 当前版本 2.3.8（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
 
 一个纯本地运行的 Windows 图形化格式转换工具，界面用 Java Swing + FlatLaf 手写（紫色主题、玻璃拟态），
 内核全部走 **FFmpeg**，另外内置酷狗 / 网易云 / QQ 音乐加密格式的解密能力。

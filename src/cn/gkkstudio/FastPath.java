@@ -214,10 +214,19 @@ final class FastPath {
             return new Decision(Kind.ENCODE, "按选定的编码重编码");
         }
         if (!fitsAudio(container, sourceAudio)) {
+            String from = shortName(sourceAudio);
             String note = sourceAudio == null || sourceAudio.isEmpty()
                     ? "没认出来源音频编码，按容器默认编码重编码"
-                    : "源音频是 " + shortName(sourceAudio) + "，装不进 "
-                    + container.toUpperCase(Locale.ROOT) + "，只能重编码";
+                    : "源音频是 " + from + "，装不进 " + container.toUpperCase(Locale.ROOT) + "，只能重编码";
+            // 有损转无损：音质不会变好，只会把文件撑大，值得提醒一句
+            if ("flac".equalsIgnoreCase(container) || "wav".equalsIgnoreCase(container)
+                    || "aiff".equalsIgnoreCase(container)) {
+                if ("mp3".equalsIgnoreCase(sourceAudio) || "aac".equalsIgnoreCase(sourceAudio)
+                        || "wmav2".equalsIgnoreCase(sourceAudio) || "opus".equalsIgnoreCase(sourceAudio)
+                        || "vorbis".equalsIgnoreCase(sourceAudio) || "amr_nb".equalsIgnoreCase(sourceAudio)) {
+                    note = note + "（源是 " + from + " 有损格式，转成无损只会变大、音质不会变好）";
+                }
+            }
             return new Decision(Kind.ENCODE, note);
         }
         return new Decision(Kind.COPY_ALL, "直接封装 · " + shortName(sourceAudio) + "（不重编码）");
