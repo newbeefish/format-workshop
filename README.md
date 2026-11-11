@@ -1,6 +1,6 @@
 # 格式作坊 · Format Workshop
 
-> 当前版本 2.3.6（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
+> 当前版本 2.3.7（2026-11）· [下载安装包](https://github.com/newbeefish/format-workshop/releases/latest)
 
 一个纯本地运行的 Windows 图形化格式转换工具，界面用 Java Swing + FlatLaf 手写（紫色主题、玻璃拟态），
 内核全部走 **FFmpeg**，另外内置酷狗 / 网易云 / QQ 音乐加密格式的解密能力。
@@ -84,7 +84,7 @@
 
 第四个板块，处理“不是媒体”的文件，按右上角分成四类，共 29 个操作。
 
-**拖进来自动认文件**：杂项默认停在「打包为 ZIP」，但丢进来的东西会先认一遍，归档 / 文档 / 图片都不再被误压一遍：
+**拖进来自动认文件**：杂项默认停在「打包为 ZPAQ」，但丢进来的东西会先认一遍，归档 / 文档 / 图片都不再被误压一遍：
 
 | 丢进来的文件 | 自动切到 |
 |---|---|

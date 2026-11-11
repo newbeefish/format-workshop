@@ -157,7 +157,8 @@ final class MiscView extends JPanel {
         dropCenter.add(Box.createVerticalGlue());
         drop.add(dropCenter, BorderLayout.CENTER);
         drop.setPreferredSize(new Dimension(0, 210));
-        panel.add(drop, BorderLayout.CENTER);
+        // 拖放卡片放 NORTH 固定高度：窗口变矮时压缩的是下面的列表，而不是把卡片挤扁
+        panel.add(drop, BorderLayout.NORTH);
 
         JPanel listPanel = new JPanel(new BorderLayout(0, 10));
         listPanel.setOpaque(false);
@@ -175,7 +176,8 @@ final class MiscView extends JPanel {
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getViewport().setBackground(Color.WHITE);
         listPanel.add(scroll, BorderLayout.CENTER);
-        panel.add(listPanel, BorderLayout.SOUTH);
+        // 列表放 CENTER：高度不够时由它自己缩（表格可滚动），拖放卡片保持固定高度
+        panel.add(listPanel, BorderLayout.CENTER);
         return panel;
     }
 
@@ -521,7 +523,7 @@ final class MiscView extends JPanel {
         this.repaint();
         this.imageFormatBox.setVisible(action == MiscAction.PDF_TO_IMG);
         this.imageFormatBox.setEnabled(action == MiscAction.PDF_TO_IMG && !this.running);
-        this.hintLabel.setText("<html><div style='width:232px'>" + action.hint + "<br>" + action.detail + "</div></html>");
+        this.hintLabel.setText(UiKit.wrapHtml(action.hint + "\n" + action.detail, 20));
     }
 
     private void chooseFiles(boolean folder) {

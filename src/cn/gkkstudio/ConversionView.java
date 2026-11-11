@@ -306,7 +306,7 @@ final class ConversionView extends JPanel {
         body.add(UiKit.inspectorLabel(this.mode.formatLabel()));
         body.add(Box.createVerticalStrut(7));
         this.formatBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-        this.formatBox.setPreferredSize(new Dimension(260, 34));
+        this.formatBox.setPreferredSize(new Dimension(244, 34));
         this.formatBox.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.formatBox);
         body.add(Box.createVerticalStrut(9));
@@ -317,7 +317,7 @@ final class ConversionView extends JPanel {
             body.add(this.codecLabel);
             body.add(Box.createVerticalStrut(7));
             this.codecBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-            this.codecBox.setPreferredSize(new Dimension(260, 34));
+            this.codecBox.setPreferredSize(new Dimension(244, 34));
             this.codecBox.setAlignmentX(Component.LEFT_ALIGNMENT);
             this.refreshCodecs();
             body.add(this.codecBox);
@@ -329,7 +329,7 @@ final class ConversionView extends JPanel {
             body.add(this.sizeLabel);
             body.add(Box.createVerticalStrut(7));
             this.sizeBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
-            this.sizeBox.setPreferredSize(new Dimension(260, 34));
+            this.sizeBox.setPreferredSize(new Dimension(244, 34));
             this.sizeBox.setAlignmentX(Component.LEFT_ALIGNMENT);
             body.add(this.sizeBox);
             body.add(Box.createVerticalStrut(9));
@@ -339,7 +339,7 @@ final class ConversionView extends JPanel {
         body.add(this.qualityLabel);
         body.add(Box.createVerticalStrut(7));
         this.qualityBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-        this.qualityBox.setPreferredSize(new Dimension(260, 34));
+        this.qualityBox.setPreferredSize(new Dimension(244, 34));
         this.qualityBox.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.qualityBox);
         body.add(Box.createVerticalStrut(8));
@@ -355,7 +355,7 @@ final class ConversionView extends JPanel {
         this.outputField.putClientProperty("JTextField.placeholderText", "输出文件夹");
         this.outputField.setToolTipText("转换后的文件保存到这里");
         this.outputField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
-        this.outputField.setPreferredSize(new Dimension(260, 34));
+        this.outputField.setPreferredSize(new Dimension(244, 34));
         this.outputField.setAlignmentX(Component.LEFT_ALIGNMENT);
         body.add(this.outputField);
         body.add(Box.createVerticalStrut(7));
@@ -410,7 +410,7 @@ final class ConversionView extends JPanel {
         this.startButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 44));
         this.startButton.setFont(this.startButton.getFont().deriveFont(Font.BOLD, 14.0f));
         this.startButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-        this.cancelButton.setPreferredSize(new Dimension(260, 34));
+        this.cancelButton.setPreferredSize(new Dimension(244, 34));
         this.cancelButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 36));
         this.cancelButton.setVisible(false);
         this.cancelButton.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -538,7 +538,7 @@ final class ConversionView extends JPanel {
                 String extension = target == null ? "png" : target.extension();
                 this.qualityLabel.setText(qualityEnabled ? "画质（JPG / WEBP）" : "画质（当前格式不使用）");
                 ImageCatalog.Info info = ImageCatalog.of(extension);
-                hint = "<html>" + brief(info.pros(), 22) + "<br>缺点：" + brief(info.cons(), 18) + "</html>";
+                hint = brief(info.pros(), 22) + "\n缺点：" + brief(info.cons(), 18);
             }
             case VIDEO -> {
                 String extension = target == null ? "mp4" : target.extension();
@@ -546,13 +546,12 @@ final class ConversionView extends JPanel {
                 VideoCatalog.Codec codec = (VideoCatalog.Codec) this.codecBox.getSelectedItem();
                 boolean gif = "gif".equals(container.extension());
                 this.qualityLabel.setText(gif ? "质量（GIF 不使用）" : "质量");
-                hint = "<html>" + container.label().split(" · ")[0] + "："
-                        + brief(container.pros(), 18) + "<br>缺点：" + brief(container.cons(), 16)
-                        + (codec == null ? "" : "<br>" + codec.tag() + "：" + brief(codec.pros(), 20))
-                        + "</html>";
+                hint = container.label().split(" · ")[0] + "："
+                        + brief(container.pros(), 18) + "\n缺点：" + brief(container.cons(), 16)
+                        + (codec == null ? "" : "\n" + codec.tag() + "：" + brief(codec.pros(), 20));
                 if (this.copyPreferred()) {
-                    hint = "<html>原样复制：容器装得下源编码时只换壳、不重编码（秒级）<br>"
-                            + "装不下或改过分辨率时，自动退回重编码</html>";
+                    hint = "原样复制：容器装得下源编码时只换壳、不重编码（秒级）\n"
+                            + "装不下或改过分辨率时，自动退回重编码";
                 }
             }
             default -> {
@@ -560,16 +559,16 @@ final class ConversionView extends JPanel {
                 boolean mp3 = "mp3".equals(ext);
                 this.qualityLabel.setText(mp3 ? "音质（MP3 生效）" : "音质（当前编码不生效）");
                 AudioCatalog.Info info = AudioCatalog.info(ext);
-                hint = "<html>" + brief(info.pros(), 22) + "<br>缺点：" + brief(info.cons(), 18) + "</html>";
+                hint = brief(info.pros(), 22) + "\n缺点：" + brief(info.cons(), 18);
                 if (this.copyPreferred()) {
-                    hint = "<html>原样复制：源音频装得进这个容器就直接封装，不重编码<br>"
-                            + "装不下（例如 FLAC 音轨进 MP4）时自动换成容器默认编码</html>";
+                    hint = "原样复制：源音频装得进这个容器就直接封装，不重编码\n"
+                            + "装不下（例如 FLAC 音轨进 MP4）时自动换成容器默认编码";
                 }
             }
         }
         this.qualityBox.setEnabled(qualityEnabled && !this.running);
         this.qualityBox.setForeground(qualityEnabled ? UiKit.TEXT : UiKit.MUTED);
-        this.hintLabel.setText(hint);
+        this.hintLabel.setText(UiKit.wrapHtml(hint == null ? "" : hint, 20));
     }
 
     private void startConversion() {

@@ -83,6 +83,42 @@ final class UiKit {
         return button;
     }
 
+    /**
+     * 把纯文本按固定列数硬折行后包成 HTML。
+     *
+     * <p>右栏只有 268px 宽，靠 HTML 的 width 样式去折行在 Swing 里并不可靠
+     * （标签的偏好宽度会超出卡片，文字右边被裁掉），所以这里自己折。
+     */
+    static String wrapHtml(String text, int columns) {
+        StringBuilder builder = new StringBuilder("<html>");
+        String[] lines = text.split("\n", -1);
+        for (int index = 0; index < lines.length; index++) {
+            if (index > 0) {
+                builder.append("<br>");
+            }
+            builder.append(wrapLine(lines[index], columns));
+        }
+        builder.append("</html>");
+        return builder.toString();
+    }
+
+    /** 按“中文算 1 列、ASCII 算半列”粗略折行。 */
+    private static String wrapLine(String line, int columns) {
+        StringBuilder out = new StringBuilder();
+        double used = 0;
+        for (int index = 0; index < line.length(); index++) {
+            char ch = line.charAt(index);
+            double width = ch < 0x2E80 ? 0.55 : 1.0;
+            if (used + width > columns) {
+                out.append("<br>");
+                used = 0;
+            }
+            out.append(ch);
+            used += width;
+        }
+        return out.toString();
+    }
+
     static JLabel inspectorLabel(String text) {
         JLabel label = new JLabel(text);
         label.setForeground(TEXT);
