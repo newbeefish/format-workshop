@@ -71,6 +71,10 @@ final class MiscView extends JPanel {
     private final JTextField passwordSuffixField = new JTextField();
     private final JTextField passwordWidthField = new JTextField("4");
     private JPanel passwordPanel;
+    /** 「图片伪装成 ZIP」的载体图片选择。 */
+    private JPanel carrierPanel;
+    private final JTextField carrierField = new JTextField();
+    private Path carrierImage;
     private final JTextField outputField = new JTextField();
     private final JSpinner concurrencySpinner = new JSpinner(new SpinnerNumberModel(
             Math.min(MAX_CONCURRENCY, 4), 1, MAX_CONCURRENCY, 1));
@@ -305,6 +309,10 @@ final class MiscView extends JPanel {
         body.add(this.apkPanel);
         fixHeight(this.apkPanel);
 
+        this.carrierPanel = this.buildCarrierPanel();
+        body.add(this.carrierPanel);
+        fixHeight(this.carrierPanel);
+
         this.passwordPanel = this.buildPasswordPanel();
         body.add(this.passwordPanel);
 
@@ -361,6 +369,49 @@ final class MiscView extends JPanel {
     }
 
     /** 「试 ZPAQ 密码」用的输入框：数字范围 + 前后缀 + 补零位数，挤成四行。 */
+    /** 载体图片：伪装成 ZIP 的那层皮。 */
+    private JPanel buildCarrierPanel() {
+        JPanel panel = new JPanel();
+        panel.setOpaque(false);
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setVisible(false);
+
+        panel.add(formLabel("载体图片", "一张正常的 PNG / JPG，发出去的就是它"));
+        panel.add(Box.createVerticalStrut(5));
+
+        JPanel row = new JPanel(new BorderLayout(6, 0));
+        row.setOpaque(false);
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        Dimension size = new Dimension(268, 34);
+        row.setPreferredSize(size);
+        row.setMinimumSize(size);
+        row.setMaximumSize(size);
+        this.carrierField.setEditable(false);
+        this.carrierField.setToolTipText("输出会沿用这张图片，尾部挂一个压缩包");
+        row.add(this.carrierField, BorderLayout.CENTER);
+        JButton pick = UiKit.secondaryButton("…");
+        pick.setToolTipText("选择载体图片（PNG / JPG）");
+        pick.setPreferredSize(new Dimension(34, 34));
+        pick.setMaximumSize(new Dimension(34, 34));
+        pick.addActionListener(event -> this.chooseCarrier());
+        row.add(pick, BorderLayout.EAST);
+        panel.add(row);
+        panel.add(Box.createVerticalStrut(6));
+        return panel;
+    }
+    private void chooseCarrier() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("选择载体图片（PNG / JPG）");
+        chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
+        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+                "图片（PNG / JPG）", "png", "jpg", "jpeg"));
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            this.carrierImage = chooser.getSelectedFile().toPath();
+            this.carrierField.setText(this.carrierImage.toString());
+        }
+    }
+
     private JPanel buildPasswordPanel() {
         JPanel panel = new JPanel();
         panel.setOpaque(false);
@@ -518,6 +569,9 @@ final class MiscView extends JPanel {
         }
         if (this.passwordPanel != null) {
             this.passwordPanel.setVisible(action == MiscAction.ZPAQ_TEST_PASSWORD);
+        }
+        if (this.carrierPanel != null) {
+            this.carrierPanel.setVisible(action == MiscAction.POLYGLOT_PACK);
         }
         this.revalidate();
         this.repaint();
@@ -686,6 +740,7 @@ final class MiscView extends JPanel {
             JOptionPane.showMessageDialog(this, "输出路径无效：" + exception.getMessage(), "路径错误", JOptionPane.ERROR_MESSAGE);
             return;
         }
+        this.engine.setCarrierImage(this.carrierImage);
         if (action == MiscAction.APK_SIGN) {
             String ks = this.keystoreField.getText().trim();
             this.engine.setApkOptions(ks.isEmpty() ? null : Path.of(ks), this.aliasField.getText(),

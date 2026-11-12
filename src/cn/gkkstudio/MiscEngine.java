@@ -37,6 +37,12 @@ final class MiscEngine {
     private boolean v2 = true;
     private boolean v3 = true;
     private boolean zipalign;
+    /** 「图片伪装成 ZIP」用的载体图片。 */
+    private Path carrierImage;
+
+    void setCarrierImage(Path carrier) {
+        this.carrierImage = carrier;
+    }
 
     void setApkOptions(Path keystore, String alias, String password, boolean v1, boolean v2, boolean v3, boolean zipalign) {
         this.keystore = keystore;
@@ -178,6 +184,8 @@ final class MiscEngine {
             case IMG_TO_PDF -> imagesToPdf(item, outputDirectory, listener);
             case PDF_TO_IMG -> pdfToImages(item, outputDirectory, imageFormat, listener);
             case APK_SIGN -> signApk(item, outputDirectory, listener);
+            case POLYGLOT_PACK -> packPolyglot(item, outputDirectory, listener);
+            case POLYGLOT_UNPACK -> unpackPolyglot(item, outputDirectory, listener);
             case ISO_PACK -> packIso(item, outputDirectory, listener);
             case ISO_UNPACK -> unpackIso(item, outputDirectory, listener);
             case ISO_MOUNT -> mountIso(item, listener);
@@ -256,6 +264,41 @@ final class MiscEngine {
             }
         }
         item.output = target;
+    }
+
+    /** 把队列里的文件/文件夹藏进载体图片，输出一张“双面”图片。 */
+    private void packPolyglot(TransferItem item, Path outputDirectory, Listener listener) throws Exception {
+        if (this.carrierImage == null || !Files.isRegularFile(this.carrierImage)) {
+            throw new IOException("请先在“载体图片”里选一张 PNG / JPG，它就是这层皮");
+        }
+        String extension = Polyglot.carrierExtension(this.carrierImage);
+        Path target = unique(outputDirectory.resolve(baseName(this.carrierImage) + extension));
+        item.detail = "正在把内容藏进图片…";
+        listener.changed(item);
+        int entries = Polyglot.pack(this.carrierImage, item.source, target, (percent, detail) -> {
+            item.progress = percent;
+            item.detail = detail;
+            listener.changed(item);
+        });
+        item.output = target;
+        item.progress = 100;
+        item.detail = "已生成双面图片：改后缀成 .zip 能解压出 " + entries + " 项，直接打开还是一张图";
+    }
+
+    /** 把图片尾部藏的压缩包解出来。 */
+    private void unpackPolyglot(TransferItem item, Path outputDirectory, Listener listener) throws Exception {
+        if (!Polyglot.containsZip(item.source)) {
+            throw new IOException("这张图片尾部没有压缩包（可能不是用它生成的）");
+        }
+        Path target = unique(outputDirectory.resolve(baseName(item.source) + "_解出"));
+        int count = Polyglot.unpack(item.source, target, (percent, detail) -> {
+            item.progress = percent;
+            item.detail = detail;
+            listener.changed(item);
+        });
+        item.output = target;
+        item.progress = 100;
+        item.detail = "解出 " + count + " 个文件";
     }
 
     private void unpackZip(TransferItem item, Path outputDirectory, Listener listener) throws Exception {

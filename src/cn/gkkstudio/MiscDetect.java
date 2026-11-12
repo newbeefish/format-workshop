@@ -120,6 +120,10 @@ final class MiscDetect {
         // 媒体文件：杂项里没有能处理它们的操作，建议去对应板块
         MediaProbe.Kind kind = MediaProbe.sniff(path);
         if (kind == MediaProbe.Kind.IMAGE) {
+            // 尾巴上挂着压缩包的双面图片，优先建议把里面的东西取出来
+            if (Polyglot.isCarrier(path) && Polyglot.containsZip(path)) {
+                return new Suggestion(MiscAction.POLYGLOT_UNPACK, null, "图片里藏着压缩包");
+            }
             return new Suggestion(MiscAction.IMG_TO_PDF, null, "图片");
         }
         if (kind == MediaProbe.Kind.VIDEO) {

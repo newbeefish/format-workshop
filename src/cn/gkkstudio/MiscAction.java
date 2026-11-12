@@ -57,14 +57,20 @@ enum MiscAction {
             "挂上后自动打开盘符", Set.of("iso"), false),
     APK_SIGN("APK 签名", "用 keystore 给 APK 签名（v1 / v2 / v3）",
             "输出已签名 APK；可先 zipalign 对齐，用官方 apksigner 实现",
-            Set.of("apk"), false);
+            Set.of("apk"), false),
+    POLYGLOT_PACK("图片伪装成 ZIP", "把文件塞进 PNG / JPG，图片照常能看",
+            "输出一张图片；改后缀成 .zip 就能解压出发出去的东西（先在“载体图片”里选一张图）",
+            Set.of(""), false),
+    POLYGLOT_UNPACK("从图片里取出内容", "解开藏在图片尾部的压缩包",
+            "输出一个文件夹；原图片本身不动，照常能看",
+            Set.of("png", "jpg", "jpeg"), true);
 
     /** 板块分类：压缩打包 / 文档与图片 / 校验与文本 / 开发工具。 */
     String category() {
         return switch (this) {
             case ZPAQ_PACK, ZPAQ_UNPACK, ZPAQ_TEST_PASSWORD, SEVENZ_PACK, SEVENZ_UNPACK, XZ_PACK, XZ_UNPACK, JAR_PACK, JAR_UNPACK, ARCHIVE_CONVERT, ZIP_PACK, ZIP_UNPACK, TAR_PACK, TAR_UNPACK -> "压缩打包";
             case HASH_VERIFY, QR_GENERATE, QR_READ, HASH, BASE64_ENCODE, BASE64_DECODE, RENAME, TOUCH -> "校验与文本";
-            case IMG_TO_PDF, PDF_TO_IMG -> "文档与图片";
+            case IMG_TO_PDF, PDF_TO_IMG, POLYGLOT_PACK, POLYGLOT_UNPACK -> "文档与图片";
             case ASM_BUILD, ISO_PACK, ISO_UNPACK, ISO_MOUNT, APK_SIGN -> "开发工具";
         };
     }
